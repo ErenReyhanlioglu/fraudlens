@@ -1,6 +1,6 @@
 """Project-specific exception hierarchy.
 
-All FraudLens errors inherit from `FraudLensException` so callers can catch
+All FraudLens errors inherit from `FraudLensError` so callers can catch
 the whole domain with a single except clause. Each exception carries a human
 readable `message` plus an optional `details` mapping for structured context
 (ids, upstream error codes, retry hints) that can be attached to log records
@@ -10,7 +10,7 @@ or API responses without losing type information.
 from typing import Any
 
 
-class FraudLensException(Exception):
+class FraudLensError(Exception):
     """Base class for all FraudLens errors.
 
     Args:
@@ -38,21 +38,21 @@ class FraudLensException(Exception):
         }
 
 
-class TransactionNotFoundError(FraudLensException):
+class TransactionNotFoundError(FraudLensError):
     """Raised when a transaction id cannot be located in the data store."""
 
 
-class ModelNotLoadedError(FraudLensException):
+class ModelNotLoadedError(FraudLensError):
     """Raised when scoring is attempted before the XGBoost artifact is loaded."""
 
 
-class AgentExecutionError(FraudLensException):
+class AgentExecutionError(FraudLensError):
     """Raised when a LangGraph agent fails during tool execution or routing."""
 
 
-class RagQueryError(FraudLensException):
+class RagQueryError(FraudLensError):
     """Raised when retrieval, reranking, or citation lookup fails."""
 
 
-class LLMProviderError(FraudLensException):
+class LLMProviderError(FraudLensError):
     """Raised when an upstream LLM call fails (timeout, rate limit, bad output)."""
