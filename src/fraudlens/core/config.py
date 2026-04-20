@@ -57,9 +57,7 @@ class Settings(BaseSettings):
     anthropic_model_haiku: str = Field(
         default="claude-haiku-4-5-20251001", alias="ANTHROPIC_MODEL_HAIKU"
     )
-    anthropic_model_sonnet: str = Field(
-        default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL_SONNET"
-    )
+    anthropic_model_sonnet: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL_SONNET")
 
     # LangSmith
     langsmith_api_key: SecretStr = Field(default=SecretStr(""), alias="LANGSMITH_API_KEY")
