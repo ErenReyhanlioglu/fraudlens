@@ -17,6 +17,7 @@ data/processed/
 # OS
 .DS_Store
 Thumbs.db
+git config --global core.autocrlf true
 
 # Distribution
 dist/
