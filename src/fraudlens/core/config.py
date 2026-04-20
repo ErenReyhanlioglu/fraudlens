@@ -97,4 +97,4 @@ def get_settings() -> Settings:
     Using a cache avoids reparsing the environment on every call and keeps
     the configuration effectively immutable for the process lifetime.
     """
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

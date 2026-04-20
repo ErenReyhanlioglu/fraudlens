@@ -69,7 +69,7 @@ def get_logger(name: str | None = None, **initial_values: Any) -> structlog.stdl
         **initial_values: Key/value pairs bound to every log record from this
             logger (e.g. `component="triage"`).
     """
-    logger = structlog.get_logger(name)
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
     if initial_values:
         logger = logger.bind(**initial_values)
     return logger
