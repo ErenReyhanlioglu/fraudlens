@@ -8,6 +8,7 @@ import pandas as pd
 import json
 import structlog
 from typing import Tuple, List, Dict
+from sklearn.preprocessing import LabelEncoder
 
 from fraudlens.core.logging import get_logger
 
@@ -604,3 +605,94 @@ def apply_time_features(
     )
     
     return df, new_features
+
+def apply_encodings(
+    df: pd.DataFrame, 
+    cat_cols: List[str],
+    export_path: str = "data/processed/encoding_rules.json"
+) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Applies Frequency and Label Encoding to categorical columns.
+    Exports mapping rules for inference consistency.
+    """
+    logger.info("Starting frequency and label encoding...")
+    
+    new_features = []
+    encoding_rules = {"label_encodings": {}, "frequency_encodings": {}}
+    
+    for col in cat_cols:
+        if col not in df.columns:
+            continue
+            
+        # 1. Frequency Encoding
+        freq_map = df[col].value_counts(dropna=False).to_dict()
+        df[f'{col}_freq'] = df[col].map(freq_map)
+        new_features.append(f'{col}_freq')
+        encoding_rules["frequency_encodings"][col] = freq_map
+        
+        # 2. Label Encoding
+        le = LabelEncoder()
+        temp_series = df[col].astype(str).fillna('Unknown')
+        df[col] = le.fit_transform(temp_series)
+        
+        encoding_rules["label_encodings"][col] = le.classes_.tolist()
+
+    def sanitize(obj):
+        if isinstance(obj, dict):
+            return {str(k): sanitize(v) for k, v in obj.items()}
+        return obj
+
+    with open(export_path, 'w') as f:
+        json.dump(sanitize(encoding_rules), f)
+        
+    logger.info(
+        "Encodings completed and rules exported",
+        encoded_cols=len(cat_cols),
+        new_freq_features=len(new_features)
+    )
+    
+    return df, new_features
+
+def apply_correlation_filter(
+    df: pd.DataFrame, 
+    threshold: float = 0.95,
+    sample_ratio: float = 0.20,
+    export_path: str = "data/processed/drop_corr.json"
+) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Identifies and drops highly correlated features.
+    Prevents multicollinearity and reduces feature space redundancy.
+    """
+    logger.info("Starting correlation analysis...", threshold=threshold, ratio=sample_ratio)
+    
+    # 1. Select only numeric columns
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    sample_n = int(len(numeric_df) * sample_ratio)
+    corr_sample = numeric_df.sample(n=sample_n, random_state=42)
+    
+    logger.info(f"Computing correlation on {sample_n} rows ({sample_ratio*100}% of data)")
+    
+    corr_matrix = corr_sample.corr().abs()
+
+    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+
+    to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
+    
+    protected_cols = ['isFraud', 'TransactionID', 'TransactionDT']
+    to_drop = [c for c in to_drop if c not in protected_cols]
+
+    df_filtered = df.drop(columns=to_drop)
+    df_filtered = df_filtered.copy()
+
+    # 8. Export rules
+    with open(export_path, 'w') as f:
+        json.dump(to_drop, f, indent=4)
+        
+    logger.info(
+        "Correlation filter completed",
+        dropped_count=len(to_drop),
+        remaining_cols=df_filtered.shape[1]
+    )
+    
+    return df_filtered, to_drop
