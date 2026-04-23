@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings",
     "sqlalchemy[asyncio]",
     "asyncpg",
+    "alembic", 
     "redis",
     "httpx",
     "structlog",
@@ -45,6 +46,7 @@ packages = ["src/fraudlens"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = ["notebooks/"] 
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "ASYNC"]

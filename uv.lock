@@ -971,6 +971,7 @@ name = "fraudlens"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -1003,6 +1004,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
