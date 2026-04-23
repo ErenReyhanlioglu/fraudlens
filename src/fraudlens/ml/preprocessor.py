@@ -1,61 +1,124 @@
-"""Preprocessing utilities for tabular fraud data."""
+"""Preprocessing utilities for tabular fraud data.
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+Pipeline ordering (CRITICAL — leakage-safe by construction):
+
+    Pre-split (only row-local or deterministic operations):
+        1. reduce_mem_usage
+        2. join_transaction_identity
+        3. normalize_d_features          # row-local arithmetic
+        4. create_uid_feature            # row-local string concat
+
+    Temporal split:
+        5. apply_temporal_split          # returns (train, val, test)
+
+    Post-split — every fit-on-train, apply-to-all-three:
+        6.  compute_missing_strategy(train)        → apply_missing_strategy(df)
+        7.  compute_low_variance_drop_list(train)  → apply_drop_columns(df)
+        8.  compute_v_feature_drop_list(train)     → apply_drop_columns(df)
+        9.  compute_aggregation_mappings(train)    → returns (train_with_oof, mappings)
+                                                     apply_aggregation_mappings(val/test, mappings)
+        10. compute_domain_mappings(train)         → apply_domain_mappings(df)
+        11. apply_time_features                    # row-local; call per split
+        12. compute_encoding_mappings(train)       → apply_encoding_mappings(df)
+        13. compute_correlation_drop_list(train)   → apply_drop_columns(df)
+
+Every ``compute_*`` returns a JSON-serializable mapping AND writes it to disk
+so the same mapping can be reapplied at inference. Every ``apply_*`` is a pure
+transformation. ``groupby`` / ``value_counts`` / ``corr`` NEVER runs on val or
+test.
+
+Step 9 combines two leakage / overfit guards that run together:
+
+* **Bayesian smoothing** on every per-group mean (``alpha=50`` by default).
+  Groups with few rows are shrunk toward the target's global mean, so tiny
+  groups (``count=1..3``) no longer produce razor-sharp, overfit-prone
+  local means. The same formula also defines the fallback for unseen keys
+  in val/test — at ``count=0`` it collapses to ``global_mean``.
+* **Expanding-window time-block OOF** on the listed ``oof_keys`` (default:
+  all group keys). Train is sorted by ``TransactionDT`` and cut into
+  ``n_blocks`` contiguous blocks; each block's aggregates are built from
+  the blocks strictly before it. Block 0 has no history — mean columns
+  fall back to ``global_mean``, which is consistent with how val treats
+  unseen keys on its first days. No ``StratifiedKFold`` shuffle, so
+  train's aggregates never peek at temporally-future rows within train.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
-import json
-import structlog
-from typing import Tuple, List, Dict
-from sklearn.preprocessing import LabelEncoder
+import xgboost as xgb
 
 from fraudlens.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+DEFAULT_EXCLUDES: tuple[str, ...] = ("TransactionID", "isFraud", "uid")
 
-@dataclass
-class MissingAnalysis:
-    """Result of a missing-value pass over a DataFrame.
 
-    Attributes:
-        dropped_columns: Column names dropped because their missing rate
-            exceeded ``drop_threshold``.
-        flag_columns: Names of ``{col}_is_null`` flag columns that were added
-            to the frame.
-        missing_rates: Per-column missing rate (``NaN`` ratio) computed before
-            any transformation. Useful for later inspection / plotting.
+# ---------------------------------------------------------------------------
+# JSON / dtype helpers
+# ---------------------------------------------------------------------------
+
+
+def _to_json_safe(obj: Any) -> Any:
+    """Recursively convert numpy / pandas scalars to plain Python types.
+
+    ``json.dumps`` does not accept ``np.float64``, ``np.int64``, or ``NaN``.
+    This walks dicts / lists and coerces leaf values so any mapping produced
+    by a ``compute_*`` function can be serialized without surprises.
     """
+    if isinstance(obj, dict):
+        return {str(k): _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(v) for v in obj]
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        val = float(obj)
+        return None if np.isnan(val) else val
+    if isinstance(obj, float):
+        return None if np.isnan(obj) else obj
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    return obj
 
-    dropped_columns: list[str] = field(default_factory=list)
-    flag_columns: list[str] = field(default_factory=list)
-    missing_rates: pd.Series = field(default_factory=lambda: pd.Series(dtype="float64"))
+
+def _write_json(payload: Any, export_path: str | Path) -> None:
+    """Write ``payload`` as indented UTF-8 JSON. Parents are created if missing."""
+    path = Path(export_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(_to_json_safe(payload), f, indent=2, ensure_ascii=False)
+
+
+def _safe_str_fill(s: pd.Series, missing_token: str = "Unknown") -> pd.Series:
+    """Stringify a series, mapping NaN to ``missing_token`` (not the literal ``'nan'``).
+
+    ``s.astype(str)`` converts NaN to the string ``'nan'`` first, which then
+    bypasses any subsequent ``fillna`` call. Doing the NaN-replacement first
+    via ``.where`` avoids that trap and gives a true "Unknown" sentinel for
+    label encoding.
+    """
+    return s.where(pd.notna(s), missing_token).astype(str)
+
+
+# ===========================================================================
+# Step 1 — memory optimization (row-local; pre-split safe)
+# ===========================================================================
 
 
 def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
-    """Downcast numeric columns in place to shrink a DataFrame's memory footprint.
+    """Downcast numeric columns to shrink the DataFrame's memory footprint.
 
-    For every column:
-        - Integer columns are downcast to the smallest signed type that fits the
-          observed range (``int8`` / ``int16`` / ``int32``; left as-is if a wider
-          type is needed).
-        - Float columns are cast to ``float32``.
-        - ``object`` columns are left untouched (category conversion is a
-          separate decision that affects joins and downstream encoders).
-
-    The transformation preserves all values — downcasting is skipped whenever
-    the observed min/max would overflow the candidate type.
-
-    Args:
-        df: Input DataFrame. The operation mutates a copy; the original frame
-            is not modified.
-        verbose: When True, log memory usage before/after and percent saved via
-            the project's structlog logger.
-
-    Returns:
-        A new DataFrame with downcast numeric dtypes and the same shape, index,
-        and column order as ``df``.
+    Integer columns are downcast to the smallest signed type (``int8`` /
+    ``int16`` / ``int32``); float columns to ``float32``. Object columns
+    are left untouched. Pure dtype manipulation, no statistics.
     """
     out = df.copy()
     start_mb = out.memory_usage(deep=True).sum() / 1024**2
@@ -64,10 +127,8 @@ def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
 
     for col in out.columns:
         dtype = out[col].dtype
-
         if pd.api.types.is_object_dtype(dtype):
             continue
-
         if pd.api.types.is_integer_dtype(dtype):
             col_min = out[col].min()
             col_max = out[col].max()
@@ -77,7 +138,6 @@ def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
                     out[col] = out[col].astype(candidate)
                     break
             continue
-
         if pd.api.types.is_float_dtype(dtype):
             out[col] = out[col].astype(np.float32)
 
@@ -89,7 +149,6 @@ def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
             "reduce_mem_usage",
             before_mb=round(start_mb, 2),
             after_mb=round(end_mb, 2),
-            saved_mb=round(start_mb - end_mb, 2),
             saved_pct=round(saved_pct, 2),
             n_rows=len(out),
             n_cols=out.shape[1],
@@ -98,35 +157,17 @@ def reduce_mem_usage(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     return out
 
 
+# ===========================================================================
+# Step 2 — identity join (row-local; pre-split safe)
+# ===========================================================================
+
+
 def join_transaction_identity(
     transaction: pd.DataFrame,
     identity: pd.DataFrame,
     verbose: bool = True,
 ) -> pd.DataFrame:
-    """Left-join the identity table onto the transaction table.
-
-    IEEE-CIS splits each record across two files: ``train_transaction`` holds
-    one row per transaction and ``train_identity`` holds optional device/session
-    attributes keyed by ``TransactionID``. Only ~25% of transactions have a
-    matching identity row, so a left join is the right shape — legit rows
-    without identity context keep their features and gain NaNs for the
-    identity columns.
-
-    Args:
-        transaction: Transaction frame; must contain ``TransactionID`` and the
-            target column ``isFraud``.
-        identity: Identity frame; must contain ``TransactionID``.
-        verbose: When True, log joined shape, fraud rate, and identity match
-            rate via the project's structlog logger.
-
-    Returns:
-        A new DataFrame with every row from ``transaction`` plus the identity
-        columns, joined on ``TransactionID``. Rows without an identity match
-        carry NaN in the identity columns.
-
-    Raises:
-        KeyError: If ``TransactionID`` is missing from either input.
-    """
+    """Left-join the identity table onto the transaction table on ``TransactionID``."""
     for name, frame in (("transaction", transaction), ("identity", identity)):
         if "TransactionID" not in frame.columns:
             raise KeyError(f"{name} frame is missing required column 'TransactionID'")
@@ -136,14 +177,10 @@ def join_transaction_identity(
     if verbose:
         matched = identity["TransactionID"].isin(transaction["TransactionID"]).sum()
         match_rate = matched / len(transaction) if len(transaction) > 0 else 0.0
-        fraud_rate = (
-            float(joined["isFraud"].mean()) if "isFraud" in joined.columns else float("nan")
-        )
+        fraud_rate = float(joined["isFraud"].mean()) if "isFraud" in joined.columns else float("nan")
         logger.info(
             "join_transaction_identity",
             shape=list(joined.shape),
-            n_rows=joined.shape[0],
-            n_cols=joined.shape[1],
             fraud_rate=round(fraud_rate, 6),
             identity_match_rate=round(match_rate, 6),
             identity_matched=int(matched),
@@ -152,547 +189,1134 @@ def join_transaction_identity(
     return joined
 
 
-def handle_missing_values(
+# ===========================================================================
+# Step 3 — D-feature normalization (row-local arithmetic; pre-split safe)
+# ===========================================================================
+
+
+def normalize_d_features(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
+    """Convert ``D1..D15`` deltas to absolute day references via ``TransactionDT``.
+
+    For each row, ``D[i]_norm = TransactionDT // 86400 - D[i]``. Pure row-local
+    arithmetic — no statistics, no leakage.
+    """
+    if "TransactionDT" not in df.columns:
+        if verbose:
+            logger.warning("normalize_d_features: TransactionDT missing; skipping")
+        return df.copy()
+
+    out = df.copy()
+    transaction_day = out["TransactionDT"] // 86400
+
+    new_cols: dict[str, pd.Series] = {}
+    for i in range(1, 16):
+        col = f"D{i}"
+        if col in out.columns:
+            new_cols[f"{col}_norm"] = transaction_day - out[col]
+
+    if new_cols:
+        out = pd.concat([out, pd.DataFrame(new_cols, index=out.index)], axis=1).copy()
+
+    if verbose:
+        logger.info("normalize_d_features", normalized_count=len(new_cols))
+
+    return out
+
+
+# ===========================================================================
+# Step 4 — UID creation (row-local string concat; pre-split safe)
+# ===========================================================================
+
+
+def create_uid_feature(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
+    """Build a synthetic unique-identifier column from card / address / email / D1.
+
+    UID approximates "a single card/account/user" and is used as a groupby key
+    for behavioral aggregations in step 9. It is a feature-engineering artifact
+    only — ``uid`` must be dropped from the final feature matrix before training.
+    """
+    required = ["card1", "addr1", "P_emaildomain", "TransactionDT", "D1"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        if verbose:
+            logger.error("create_uid_feature: missing required columns", missing=missing)
+        return df.copy()
+
+    out = df.copy()
+    transaction_day = out["TransactionDT"] // 86400
+    d1_norm = transaction_day - out["D1"]
+
+    parts = [
+        out["card1"].fillna("NaN").astype(str),
+        out["addr1"].fillna("NaN").astype(str),
+        out["P_emaildomain"].fillna("NaN").astype(str),
+        d1_norm.fillna(-999).astype(str),
+    ]
+    out["uid"] = parts[0] + "_" + parts[1] + "_" + parts[2] + "_" + parts[3]
+
+    if verbose:
+        logger.info(
+            "create_uid_feature",
+            n_rows=len(out),
+            unique_uids=int(out["uid"].nunique()),
+        )
+    return out
+
+
+# ===========================================================================
+# Step 5 — temporal split (chronological; writes parquet files)
+# ===========================================================================
+
+
+def apply_temporal_split(
     df: pd.DataFrame,
+    train_ratio: float = 0.70,
+    val_ratio: float = 0.15,
+    save_dir: str | Path | None = None,
+    verbose: bool = True,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Sort by ``TransactionDT`` and split chronologically into train / val / test.
+
+    Test ratio is implicitly ``1 - train_ratio - val_ratio``. If ``save_dir`` is
+    provided, parquet files are written immediately. Defaults to ``None`` because
+    the canonical save point is *after* all post-split feature engineering.
+    """
+    if train_ratio + val_ratio >= 1.0:
+        raise ValueError(f"train_ratio + val_ratio must be < 1 (got {train_ratio + val_ratio:.3f})")
+    if "TransactionDT" not in df.columns:
+        raise KeyError("apply_temporal_split requires 'TransactionDT'")
+
+    sorted_df = df.sort_values("TransactionDT").reset_index(drop=True)
+    total_len = len(sorted_df)
+    train_end = int(total_len * train_ratio)
+    val_end = int(total_len * (train_ratio + val_ratio))
+
+    train = sorted_df.iloc[:train_end].copy()
+    val = sorted_df.iloc[train_end:val_end].copy()
+    test = sorted_df.iloc[val_end:].copy()
+
+    if save_dir is not None:
+        save_path = Path(save_dir)
+        save_path.mkdir(parents=True, exist_ok=True)
+        for name, frame in (("train", train), ("val", val), ("test", test)):
+            path = save_path / f"{name}.parquet"
+            frame.to_parquet(path, index=False)
+            if verbose:
+                logger.info(
+                    "apply_temporal_split.saved",
+                    split=name,
+                    path=str(path),
+                    shape=list(frame.shape),
+                )
+
+    if verbose:
+        logger.info(
+            "apply_temporal_split",
+            train_shape=list(train.shape),
+            val_shape=list(val.shape),
+            test_shape=list(test.shape),
+        )
+
+    return train, val, test
+
+
+# ===========================================================================
+# Step 6 — missing-value handling (fit on TRAIN, apply to all)
+# ===========================================================================
+
+
+def compute_missing_strategy(
+    train: pd.DataFrame,
     drop_threshold: float = 0.9,
     flag_threshold: float = 0.05,
     exclude_cols: Sequence[str] | None = None,
+    export_path: str = "data/processed/missing_strategy.json",
     verbose: bool = True,
-) -> tuple[pd.DataFrame, MissingAnalysis]:
-    """Flag and prune columns based on missing-value rates.
-
-    The transformation runs in two passes over every non-excluded column:
-
-        1. **Flag**: if the missing rate is strictly greater than
-           ``flag_threshold``, append an ``{col}_is_null`` column of ``int8``
-           indicating which rows were NaN in the original. Flags are created
-           *before* pruning so the missingness signal of a dropped column is
-           preserved as a binary feature.
-        2. **Drop**: if the missing rate is strictly greater than
-           ``drop_threshold``, remove the original column. The corresponding
-           ``{col}_is_null`` flag (if any) stays in the returned frame.
-
-    The input DataFrame is copied, never mutated.
-
-    Args:
-        df: Input DataFrame. Expected to already be memory-optimized / joined.
-        drop_threshold: Missing-rate cutoff above which a column is dropped
-            (default ``0.9`` → columns with more than 90% NaN are removed).
-        flag_threshold: Missing-rate cutoff above which a flag column is
-            created (default ``0.05`` → columns with more than 5% NaN get an
-            ``_is_null`` companion).
-        exclude_cols: Column names to skip entirely (identifiers, target, etc.).
-            Defaults to ``("TransactionID", "isFraud")``.
-        verbose: When True, log counts and examples via the project logger.
+) -> dict[str, Any]:
+    """Compute which columns to drop or flag, **using train missing-rates only**.
 
     Returns:
-        A tuple ``(df_out, report)`` where ``df_out`` is the transformed
-        frame and ``report`` holds the dropped/flag column lists and the
-        per-column missing-rate series (computed before any change).
-
-    Raises:
-        ValueError: If either threshold is outside ``[0.0, 1.0]``.
+        ``{"flag_columns": [...], "drop_columns": [...], "thresholds": {...}}``
     """
     if not 0.0 <= drop_threshold <= 1.0:
         raise ValueError(f"drop_threshold must be in [0, 1], got {drop_threshold}")
     if not 0.0 <= flag_threshold <= 1.0:
         raise ValueError(f"flag_threshold must be in [0, 1], got {flag_threshold}")
 
-    default_excludes = ("TransactionID", "isFraud")
-    excluded = set(exclude_cols) if exclude_cols is not None else set(default_excludes)
+    excluded = set(exclude_cols) if exclude_cols is not None else set(DEFAULT_EXCLUDES)
+    missing_rates = train.isna().mean()
 
-    missing_rates = df.isna().mean().sort_values(ascending=False)
+    flag_columns: list[str] = []
+    drop_columns: list[str] = []
 
-    dropped: list[str] = []
-    flags: list[str] = []
-    flag_series: dict[str, pd.Series] = {}
-
-    candidate_cols = [c for c in df.columns if c not in excluded]
-
-    for col in candidate_cols:
+    for col in train.columns:
+        if col in excluded:
+            continue
         rate = float(missing_rates.get(col, 0.0))
         if rate > flag_threshold:
-            flag_name = f"{col}_is_null"
-            flag_series[flag_name] = df[col].isna().astype(np.int8)
-            flags.append(flag_name)
+            flag_columns.append(col)
         if rate > drop_threshold:
-            dropped.append(col)
+            drop_columns.append(col)
 
-    base = df.drop(columns=dropped) if dropped else df
+    payload = {
+        "flag_columns": flag_columns,
+        "drop_columns": drop_columns,
+        "thresholds": {"drop": drop_threshold, "flag": flag_threshold},
+    }
+    _write_json(payload, export_path)
+
+    if verbose:
+        logger.info(
+            "compute_missing_strategy",
+            n_flags=len(flag_columns),
+            n_drops=len(drop_columns),
+            drop_threshold=drop_threshold,
+            flag_threshold=flag_threshold,
+            export_path=str(export_path),
+        )
+
+    return payload
+
+
+def apply_missing_strategy(
+    df: pd.DataFrame,
+    strategy: Mapping[str, Any],
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Append ``{col}_is_null`` flag columns and drop high-missing columns.
+
+    Both lists are pre-computed from train; the same lists are applied to
+    val and test so the three splits stay feature-aligned.
+    """
+    flag_columns: list[str] = list(strategy.get("flag_columns", []))
+    drop_columns: list[str] = list(strategy.get("drop_columns", []))
+
+    flag_series: dict[str, pd.Series] = {}
+    for col in flag_columns:
+        if col in df.columns:
+            flag_series[f"{col}_is_null"] = df[col].isna().astype(np.int8)
+
+    drop_present = [c for c in drop_columns if c in df.columns]
+    base = df.drop(columns=drop_present) if drop_present else df
+
     if flag_series:
         flags_df = pd.DataFrame(flag_series, index=df.index)
         out = pd.concat([base, flags_df], axis=1).copy()
     else:
         out = base.copy()
 
-    report = MissingAnalysis(
-        dropped_columns=dropped,
-        flag_columns=flags,
-        missing_rates=missing_rates,
+    if verbose:
+        logger.info(
+            "apply_missing_strategy",
+            input_cols=df.shape[1],
+            output_cols=out.shape[1],
+            flags_added=len(flag_series),
+            cols_dropped=len(drop_present),
+        )
+    return out
+
+
+# ===========================================================================
+# Step 7 — low-variance column drop (fit on TRAIN, drop from all)
+# ===========================================================================
+
+
+def compute_low_variance_drop_list(
+    train: pd.DataFrame,
+    frequency_threshold: float = 0.99,
+    exclude_cols: Sequence[str] | None = None,
+    export_path: str = "data/processed/drop_low_variance.json",
+    verbose: bool = True,
+) -> list[str]:
+    """List columns where a single value covers ``frequency_threshold`` of train.
+
+    The list is computed only from train and then handed to
+    :func:`apply_drop_columns` for val and test. NaN values count as a category
+    via ``dropna=False``.
+    """
+    excluded = set(exclude_cols) if exclude_cols is not None else set(DEFAULT_EXCLUDES)
+    to_drop: list[str] = []
+    for col in train.columns:
+        if col in excluded:
+            continue
+        top_ratio = train[col].value_counts(normalize=True, dropna=False).iloc[0]
+        if top_ratio >= frequency_threshold:
+            to_drop.append(col)
+
+    _write_json(to_drop, export_path)
+    if verbose:
+        logger.info(
+            "compute_low_variance_drop_list",
+            threshold=frequency_threshold,
+            n_dropped=len(to_drop),
+            export_path=str(export_path),
+        )
+    return to_drop
+
+
+# ===========================================================================
+# Step 8 — V-feature pruning (fit on TRAIN, drop from all)
+# ===========================================================================
+
+
+def compute_v_feature_drop_list(
+    train: pd.DataFrame,
+    keep_n: int = 2,
+    export_path: str = "data/processed/drop_v_features.json",
+    verbose: bool = True,
+) -> list[str]:
+    """List V* columns to drop based on TRAIN NaN-pattern groups + variance.
+
+    IEEE-CIS V* columns come in blocks that share an identical NaN pattern.
+    Within each block, keep the ``keep_n`` columns with the highest variance
+    (in train); drop the rest. NaN-grouping and variance ranking are both
+    train-only.
+    """
+    v_cols = [c for c in train.columns if c.startswith("V") and not c.endswith("_is_null")]
+    if not v_cols:
+        if verbose:
+            logger.warning("compute_v_feature_drop_list: no V* columns found")
+        return []
+
+    nan_groups: dict[int, list[str]] = {}
+    for col in v_cols:
+        nan_count = int(train[col].isna().sum())
+        nan_groups.setdefault(nan_count, []).append(col)
+
+    v_variances = train[v_cols].var()
+
+    dropped: list[str] = []
+    for cols in nan_groups.values():
+        if len(cols) <= keep_n:
+            continue
+        ranked = v_variances[cols].sort_values(ascending=False)
+        top = ranked.head(keep_n).index.tolist()
+        dropped.extend(c for c in cols if c not in top)
+
+    _write_json(
+        {"groups_found": len(nan_groups), "dropped_v_cols": dropped},
+        export_path,
+    )
+    if verbose:
+        logger.info(
+            "compute_v_feature_drop_list",
+            initial_v_cols=len(v_cols),
+            groups=len(nan_groups),
+            dropped=len(dropped),
+            export_path=str(export_path),
+        )
+    return dropped
+
+
+# ===========================================================================
+# Step 9 — groupby aggregations with OOF for high-cardinality keys
+# ===========================================================================
+
+
+DEFAULT_GROUP_KEYS: tuple[str, ...] = ("card1", "card2", "card3", "card5", "uid", "addr1")
+DEFAULT_AGGS: dict[str, tuple[str, ...]] = {
+    "TransactionAmt": ("mean", "std", "max", "min", "median"),
+    "D1": ("mean", "std", "nunique"),
+    "C1": ("mean", "max"),
+    "dist1": ("mean", "std"),
+}
+DEFAULT_NUNIQUE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("card1", "addr1"),
+    ("card1", "P_emaildomain"),
+)
+DEFAULT_ALPHA: float = 50.0
+DEFAULT_N_BLOCKS: int = 5
+
+
+def _smooth(count: pd.Series, local_mean: pd.Series, global_mean: float, alpha: float) -> pd.Series:
+    """Bayesian shrinkage of per-group means toward a global prior.
+
+    ``smoothed = (count * local_mean + alpha * global_mean) / (count + alpha)``
+
+    Vectorized on groupby outputs. Groups with ``count >> alpha`` keep their
+    local mean; groups with ``count << alpha`` are pulled toward the prior.
+    A universal formula — no hard-threshold branches on small groups.
+    """
+    return (count * local_mean + alpha * global_mean) / (count + alpha)
+
+
+def _build_rules_from_pool(
+    pool: pd.DataFrame,
+    group_keys: Sequence[str],
+    agg_spec: Mapping[str, Sequence[str]],
+    nunique_pairs: Sequence[tuple[str, str]],
+    global_means: Mapping[str, float],
+    alpha: float,
+) -> dict[str, dict[str, dict[str, dict[Any, Any]]]]:
+    """Build per-key aggregation rules on the given data pool.
+
+    ``mean`` metrics are smoothed via :func:`_smooth` with ``global_means`` as
+    the prior. ``max / min / std / median / nunique`` are stored raw — the
+    Bayesian formula is only well-defined for means.
+
+    An empty pool still produces a rule skeleton with empty dicts, so the
+    apply step can fall back to ``global_mean`` on mean columns (matches the
+    ``count=0`` limit of the smoothing formula).
+    """
+    rules: dict[str, dict[str, dict[str, dict[Any, Any]]]] = {}
+    for key in group_keys:
+        if key not in pool.columns:
+            continue
+        rules.setdefault(key, {})
+
+        for target, metrics in agg_spec.items():
+            if target not in pool.columns or target == key:
+                continue
+            rules[key][target] = {}
+            if len(pool) == 0:
+                for metric in metrics:
+                    rules[key][target][metric] = {}
+                continue
+            needed = list(dict.fromkeys(("count", "mean", *metrics)))
+            grouped = pool.groupby(key)[target].agg(needed)
+            for metric in metrics:
+                if metric == "mean":
+                    smoothed = _smooth(
+                        grouped["count"],
+                        grouped["mean"],
+                        global_means.get(target, 0.0),
+                        alpha,
+                    )
+                    rules[key][target]["mean"] = smoothed.to_dict()
+                else:
+                    rules[key][target][metric] = grouped[metric].to_dict()
+
+        for k_pair, t_pair in nunique_pairs:
+            if k_pair != key or t_pair not in pool.columns:
+                continue
+            feature = f"{t_pair}_nunique"
+            nunique_dict = pool.groupby(key)[t_pair].nunique().to_dict() if len(pool) > 0 else {}
+            rules[key][feature] = {feature: nunique_dict}
+
+    return rules
+
+
+def _map_rules_to_series(
+    rules: Mapping[str, Any],
+    df: pd.DataFrame,
+    global_means: Mapping[str, float],
+) -> dict[str, pd.Series]:
+    """Map ``rules`` onto ``df`` rows and return the aggregate columns as Series.
+
+    On ``mean`` columns, unseen keys fall back to the target's ``global_mean``
+    (Bayesian formula's ``count=0`` limit). Other metrics leave unseen as NaN.
+    """
+    new_cols: dict[str, pd.Series] = {}
+    for key, target_dict in rules.items():
+        if key not in df.columns:
+            continue
+        key_series = df[key]
+        for target, metric_dict in target_dict.items():
+            for metric, mapping in metric_dict.items():
+                col_name = f"{key}_{target}" if target.endswith("_nunique") else f"{key}_{target}_{metric}"
+                mapped = key_series.map(mapping)
+                if metric == "mean" and target in global_means:
+                    mapped = mapped.fillna(global_means[target])
+                new_cols[col_name] = mapped.astype("float32")
+    return new_cols
+
+
+def _added_agg_column_names(
+    train: pd.DataFrame,
+    group_keys: Sequence[str],
+    agg_spec: Mapping[str, Sequence[str]],
+    nunique_pairs: Sequence[tuple[str, str]],
+) -> list[str]:
+    """Deterministic list of aggregate column names this pipeline will add."""
+    names: list[str] = []
+    for key in group_keys:
+        if key not in train.columns:
+            continue
+        for target, metrics in agg_spec.items():
+            if target not in train.columns or target == key:
+                continue
+            names.extend(f"{key}_{target}_{m}" for m in metrics)
+        for k_pair, t_pair in nunique_pairs:
+            if k_pair != key or t_pair not in train.columns:
+                continue
+            names.append(f"{key}_{t_pair}_nunique")
+    return names
+
+
+def _apply_aggregations_to_train(
+    train: pd.DataFrame,
+    full_rules: Mapping[str, Any],
+    group_keys: Sequence[str],
+    agg_spec: Mapping[str, Sequence[str]],
+    nunique_pairs: Sequence[tuple[str, str]],
+    oof_keys: Sequence[str],
+    global_means: Mapping[str, float],
+    alpha: float,
+    n_blocks: int,
+    time_col: str,
+) -> pd.DataFrame:
+    """Materialize aggregate features on train.
+
+    Keys in ``oof_keys`` get expanding-window time-block OOF: train is sorted
+    by ``time_col`` and cut into ``n_blocks`` contiguous blocks; for block
+    ``i`` the rules are built only from blocks ``0..i-1`` (strictly past).
+    Block 0 has no history — mean columns fall back to the target's
+    ``global_mean`` (same behaviour val sees on its unseen keys), other
+    metrics stay NaN.
+
+    Keys not in ``oof_keys`` are mapped directly from ``full_rules`` — the
+    Bayesian smoothing already dampens any low-count self-leak.
+    """
+    n = len(train)
+    oof_set = {k for k in oof_keys if k in train.columns}
+    non_oof_set = {k for k in group_keys if k in train.columns and k not in oof_set}
+
+    new_cols: dict[str, np.ndarray] = {}
+
+    if non_oof_set:
+        non_oof_rules = {k: v for k, v in full_rules.items() if k in non_oof_set}
+        for col_name, series in _map_rules_to_series(non_oof_rules, train, global_means).items():
+            new_cols[col_name] = series.to_numpy(dtype="float32", copy=True)
+
+    if oof_set:
+        if time_col not in train.columns:
+            raise KeyError(f"time-block OOF requires column {time_col!r} in train")
+
+        oof_group_keys = [k for k in group_keys if k in oof_set]
+        oof_nunique_pairs = [p for p in nunique_pairs if p[0] in oof_set]
+
+        oof_buffers: dict[str, np.ndarray] = {
+            col_name: np.full(n, np.nan, dtype="float32")
+            for col_name in _added_agg_column_names(train, oof_group_keys, agg_spec, oof_nunique_pairs)
+        }
+
+        sort_pos = np.argsort(train[time_col].to_numpy(), kind="stable")
+        sorted_train = train.iloc[sort_pos]
+
+        bounds = [int(n * i / n_blocks) for i in range(n_blocks + 1)]
+        for i in range(n_blocks):
+            start, end = bounds[i], bounds[i + 1]
+            if start == end:
+                continue
+            pool = sorted_train.iloc[:start]
+            fold_df = sorted_train.iloc[start:end]
+
+            fold_rules = _build_rules_from_pool(
+                pool=pool,
+                group_keys=oof_group_keys,
+                agg_spec=agg_spec,
+                nunique_pairs=oof_nunique_pairs,
+                global_means=global_means,
+                alpha=alpha,
+            )
+            fold_cols = _map_rules_to_series(fold_rules, fold_df, global_means)
+            for col_name, series in fold_cols.items():
+                oof_buffers[col_name][start:end] = series.to_numpy(dtype="float32", copy=True)
+            logger.debug(
+                "aggregation_oof.block_done",
+                block=i,
+                n_blocks=n_blocks,
+                pool_rows=int(start),
+                fold_rows=int(end - start),
+            )
+
+        inv_sort = np.argsort(sort_pos, kind="stable")
+        for col_name, arr in oof_buffers.items():
+            new_cols[col_name] = arr[inv_sort]
+
+    if not new_cols:
+        return train.copy()
+
+    new_df = pd.DataFrame(new_cols, index=train.index)
+    return pd.concat([train, new_df], axis=1).copy()
+
+
+def compute_aggregation_mappings(
+    train: pd.DataFrame,
+    group_keys: Sequence[str] = DEFAULT_GROUP_KEYS,
+    aggs: Mapping[str, Sequence[str]] | None = None,
+    nunique_pairs: Sequence[tuple[str, str]] = DEFAULT_NUNIQUE_PAIRS,
+    oof_keys: Sequence[str] | None = None,
+    alpha: float = DEFAULT_ALPHA,
+    n_blocks: int = DEFAULT_N_BLOCKS,
+    time_col: str = "TransactionDT",
+    export_path: str = "data/processed/aggregation_mappings.json",
+    verbose: bool = True,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Fit aggregation mappings on train with Bayesian smoothing + time-block OOF.
+
+    Every ``mean`` aggregate is shrunk toward the target's global prior via
+    :func:`_smooth` (prior weight ``alpha``). Other metrics are stored raw.
+    For each key in ``oof_keys`` (default: all ``group_keys``), train-side
+    features come from an expanding-window time-block OOF so that no train
+    aggregate peeks at temporally-future train rows.
+
+    Args:
+        train: Train-only DataFrame.
+        group_keys: Columns used as groupby keys.
+        aggs: ``{target_col: (metric, ...)}``. Defaults to :data:`DEFAULT_AGGS`.
+        nunique_pairs: Extra ``(group_key, target)`` pairs for nunique counts.
+        oof_keys: Subset of ``group_keys`` that receive expanding-window
+            time-block OOF on train. ``None`` (default) means all group keys.
+        alpha: Prior weight for Bayesian smoothing. Default 50.
+        n_blocks: Number of chronological blocks used for train OOF.
+        time_col: Column used to order train before block-cutting.
+        export_path: Where to write the JSON mapping snapshot.
+        verbose: Emit a structlog summary when True.
+
+    Returns:
+        ``(train_with_features, mappings)`` — ``train_with_features`` is the
+        train DataFrame extended with the new aggregate columns. ``mappings``
+        is the payload fed into :func:`apply_aggregation_mappings` for val/test.
+    """
+    agg_spec: Mapping[str, Sequence[str]] = DEFAULT_AGGS if aggs is None else aggs
+    oof_keys_effective: tuple[str, ...] = tuple(group_keys) if oof_keys is None else tuple(oof_keys)
+
+    global_means: dict[str, float] = {}
+    for target in agg_spec:
+        if target in train.columns:
+            global_means[target] = float(train[target].mean())
+
+    full_rules = _build_rules_from_pool(
+        pool=train,
+        group_keys=group_keys,
+        agg_spec=agg_spec,
+        nunique_pairs=nunique_pairs,
+        global_means=global_means,
+        alpha=alpha,
+    )
+    added_columns = _added_agg_column_names(train, group_keys, agg_spec, nunique_pairs)
+
+    payload: dict[str, Any] = {
+        "rules": full_rules,
+        "columns": added_columns,
+        "oof_keys": list(oof_keys_effective),
+        "n_blocks": n_blocks,
+        "alpha": alpha,
+        "global_means": global_means,
+        "time_col": time_col,
+    }
+    _write_json(payload, export_path)
+
+    train_with_features = _apply_aggregations_to_train(
+        train=train,
+        full_rules=full_rules,
+        group_keys=group_keys,
+        agg_spec=agg_spec,
+        nunique_pairs=nunique_pairs,
+        oof_keys=oof_keys_effective,
+        global_means=global_means,
+        alpha=alpha,
+        n_blocks=n_blocks,
+        time_col=time_col,
     )
 
     if verbose:
         logger.info(
-            "handle_missing_values",
-            input_cols=df.shape[1],
-            output_cols=out.shape[1],
-            n_dropped=len(dropped),
-            n_flags=len(flags),
-            drop_threshold=drop_threshold,
-            flag_threshold=flag_threshold,
-            top_missing=[
-                {"col": c, "rate": round(float(r), 4)} for c, r in missing_rates.head(5).items()
-            ],
+            "compute_aggregation_mappings",
+            n_rules=sum(len(v) for v in full_rules.values()),
+            added_columns=len(added_columns),
+            oof_keys=list(oof_keys_effective),
+            n_blocks=n_blocks,
+            alpha=alpha,
+            train_shape_after=list(train_with_features.shape),
+            export_path=str(export_path),
         )
 
-    return out, report
+    return train_with_features, payload
 
-def drop_low_variance_features(
-    df: pd.DataFrame, 
-    frequency_threshold: float = 0.99, 
-    export_path: str = "data/processed/drop_variance.json"
-) -> Tuple[pd.DataFrame, List[str]]:
-    
-    logger.info("Starting variance analysis...", initial_cols=df.shape[1])
-    
-    to_drop = []
-    
-    for col in df.columns:
-        # Calculate the proportion of the single most frequent value (including NaNs)
-        most_frequent_ratio = df[col].value_counts(normalize=True, dropna=False).values[0]
-        
-        if most_frequent_ratio >= frequency_threshold:
-            to_drop.append(col)
-            
-    df_reduced = df.drop(columns=to_drop)
-    
-    with open(export_path, 'w') as f:
-        json.dump(to_drop, f, indent=4)
-        
-    logger.info(
-        "Variance analysis completed",
-        threshold=frequency_threshold,
-        dropped_count=len(to_drop),
-        remaining_cols=df_reduced.shape[1]
-    )
-    
-    return df_reduced, to_drop
 
-def reduce_v_features(
-    df: pd.DataFrame, 
-    keep_n: int = 2,
-    export_path: str = "data/processed/v_feature_reduction.json"
-) -> Tuple[pd.DataFrame, List[str]]:
-    
-    logger.info("Starting V-feature reduction...", keep_per_group=keep_n)
-    
-    v_cols = [col for col in df.columns if col.startswith('V') and not col.endswith('_is_null')]
-    
-    if not v_cols:
-        logger.warning("No V-features found in the DataFrame.")
-        return df, []
+def apply_aggregation_mappings(
+    df: pd.DataFrame,
+    mappings: Mapping[str, Any],
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Map the fitted (smoothed) aggregations onto ``df`` (val or test).
 
-    nan_groups: Dict[int, List[str]] = {}
-    
-    # Group V-features by their exact NaN counts
-    for col in v_cols:
-        nan_count = df[col].isnull().sum()
-        if nan_count not in nan_groups:
-            nan_groups[nan_count] = []
-        nan_groups[nan_count].append(col)
-        
-    # Calculate variances once for efficiency
-    v_variances = df[v_cols].var()
-    
-    kept_cols = []
-    dropped_cols = []
-    
-    # Process each group
-    for nan_count, cols in nan_groups.items():
-        if len(cols) <= keep_n:
-            kept_cols.extend(cols)
-        else:
-            # Sort columns in the group by variance (descending)
-            group_variances = v_variances[cols].sort_values(ascending=False)
-            top_cols = group_variances.head(keep_n).index.tolist()
-            
-            kept_cols.extend(top_cols)
-            
-            # The rest are dropped
-            dropped = [c for c in cols if c not in top_cols]
-            dropped_cols.extend(dropped)
-
-    df_reduced = df.drop(columns=dropped_cols)
-    
-    # Export state for inference API
-    state = {
-        "groups_found": len(nan_groups),
-        "kept_v_cols": kept_cols,
-        "dropped_v_cols": dropped_cols
-    }
-    
-    with open(export_path, 'w') as f:
-        json.dump(state, f, indent=4)
-        
-    logger.info(
-        "V-feature reduction completed",
-        initial_v_cols=len(v_cols),
-        groups_identified=len(nan_groups),
-        kept_count=len(kept_cols),
-        dropped_count=len(dropped_cols)
-    )
-    
-    return df_reduced, dropped_cols
-
-def normalize_d_features(df: pd.DataFrame) -> pd.DataFrame:
+    On ``mean`` columns, unseen keys fall back to ``global_mean`` of the
+    target — which is exactly the ``count=0`` limit of :func:`_smooth`. Other
+    metrics leave unseen values as NaN (XGBoost handles natively).
     """
-    Normalizes time-delta D features (D1-D15) by converting them into 
-    static reference points using the TransactionDT.
-    
-    Calculation:
-    Transaction Day = TransactionDT // (24 * 60 * 60)
-    Normalized_D = Transaction Day - D_feature
+    rules = mappings.get("rules", {})
+    global_means: Mapping[str, float] = mappings.get("global_means", {})
+
+    new_cols = _map_rules_to_series(rules, df, global_means)
+    out = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1).copy() if new_cols else df.copy()
+
+    if verbose:
+        logger.info(
+            "apply_aggregation_mappings",
+            n_rows=len(out),
+            n_new_cols=len(new_cols),
+            output_cols=out.shape[1],
+        )
+    return out
+
+
+# ===========================================================================
+# Step 10 — relative / domain features (fit entity stats on TRAIN)
+# ===========================================================================
+
+
+DEFAULT_ENTITY_COLS: tuple[str, ...] = ("card1", "card2", "addr1", "ProductCD", "P_emaildomain")
+
+
+def compute_domain_mappings(
+    train: pd.DataFrame,
+    entity_cols: Sequence[str] = DEFAULT_ENTITY_COLS,
+    alpha: float = DEFAULT_ALPHA,
+    export_path: str = "data/processed/domain_mappings.json",
+    verbose: bool = True,
+) -> dict[str, Any]:
+    """Fit per-entity ``TransactionAmt`` mean/median lookups on train.
+
+    Means are shrunk toward ``global_mean`` via :func:`_smooth` (prior weight
+    ``alpha``) so low-count entities do not inject razor-sharp local averages
+    into the downstream ratio features. Medians are stored raw.
+
+    Behavioural Z-scores in :func:`apply_domain_mappings` read UID-aggregated
+    columns produced by step 9, so nothing is recomputed there.
     """
-    logger.info("Starting D-feature normalization...")
-    
-    if 'TransactionDT' not in df.columns:
-        logger.warning("TransactionDT not found! Cannot normalize D features.")
-        return df
-        
-    # TransactionDT is in seconds. Convert to Days 
-    transaction_day = df['TransactionDT'] // 86400
-    
-    d_cols = [f'D{i}' for i in range(1, 16)]
-    
-    normalized_count = 0
-    for col in d_cols:
-        if col in df.columns:
-            new_col_name = f'{col}_norm'
-            # Calculate the absolute past day reference
-            df[new_col_name] = transaction_day - df[col]
-            normalized_count += 1
-            
-    logger.info(
-        "D-feature normalization completed", 
-        features_normalized=normalized_count
-    )
-    
-    return df
+    entities: dict[str, dict[str, dict[Any, float]]] = {}
+    if "TransactionAmt" not in train.columns:
+        payload: dict[str, Any] = {
+            "entities": entities,
+            "global_mean": None,
+            "global_median": None,
+            "alpha": alpha,
+        }
+        _write_json(payload, export_path)
+        if verbose:
+            logger.warning("compute_domain_mappings: TransactionAmt missing; empty payload")
+        return payload
 
-def create_uid_feature(df: pd.DataFrame) -> pd.DataFrame:
-    logger.info("Starting UID creation...")
-    
-    required_cols = ['card1', 'addr1', 'P_emaildomain', 'TransactionDT', 'D1']
-    missing_cols = [c for c in required_cols if c not in df.columns]
-    
-    if missing_cols:
-        logger.error(f"Missing columns for UID creation: {missing_cols}")
-        return df
+    global_mean = float(train["TransactionAmt"].mean())
+    global_median = float(train["TransactionAmt"].median())
 
-    # Re-calculate normalized D1 for the UID string 
-    # (in case D1_norm was dropped or altered)
-    transaction_day = df['TransactionDT'] // 86400
-    d1_norm = transaction_day - df['D1']
-    
-    c_card = df['card1'].fillna('NaN').astype(str)
-    c_addr = df['addr1'].fillna('NaN').astype(str)
-    c_email = df['P_emaildomain'].fillna('NaN').astype(str)
-    c_d1 = d1_norm.fillna(-999).astype(str)
-    
-    # Vectorized string concatenation
-    df['uid'] = c_card + "_" + c_addr + "_" + c_email + "_" + c_d1
-    
-    unique_uids = df['uid'].nunique()
-    
-    logger.info(
-        "UID creation completed", 
-        total_rows=df.shape[0],
-        unique_uids=unique_uids
-    )
-    
-    return df
-
-def apply_scaled_aggregations(
-    df: pd.DataFrame, 
-    export_path: str = "data/processed/aggregation_rules.json"
-) -> Tuple[pd.DataFrame, List[str]]:
-    logger.info("Starting aggregation matrix")
-    
-    new_features_data = {} 
-    all_rules = {}
-    
-    group_keys = ['card1', 'card2', 'card3', 'card5', 'uid', 'addr1']
-    aggs = {
-        'TransactionAmt': ['mean', 'std', 'max', 'min', 'median'],
-        'D1': ['mean', 'std', 'nunique'],
-        'C1': ['mean', 'max'],
-        'dist1': ['mean', 'std']
-    }
-    
-    for key in group_keys:
-        if key not in df.columns:
+    for col in entity_cols:
+        if col not in train.columns:
             continue
-            
-        all_rules[key] = {}
-        for target, metrics in aggs.items():
-            if target not in df.columns or key == target:
+        grouped = train.groupby(col)["TransactionAmt"].agg(["count", "mean", "median"])
+        smoothed_mean = _smooth(grouped["count"], grouped["mean"], global_mean, alpha)
+        entities[col] = {
+            "mean": smoothed_mean.to_dict(),
+            "median": grouped["median"].to_dict(),
+        }
+
+    payload = {
+        "entities": entities,
+        "global_mean": global_mean,
+        "global_median": global_median,
+        "alpha": alpha,
+    }
+    _write_json(payload, export_path)
+
+    if verbose:
+        logger.info(
+            "compute_domain_mappings",
+            entities=list(entities.keys()),
+            alpha=alpha,
+            export_path=str(export_path),
+        )
+    return payload
+
+
+def apply_domain_mappings(
+    df: pd.DataFrame,
+    mappings: Mapping[str, Any],
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Append relative / domain features using pre-fitted entity mappings.
+
+    Entity ratios use the **smoothed** entity mean (with fallback to
+    ``global_mean`` for unseen entities) and the raw entity median (with
+    fallback to ``global_median``). UID-based Z-scores read columns produced
+    by :func:`compute_aggregation_mappings` — call that first. Row-local
+    features (``log1p``, decimal split, ``email_match``) are computed here.
+    """
+    out = df.copy()
+    eps = 1e-6
+    new_cols: dict[str, pd.Series] = {}
+
+    uid_mean = out.get("uid_TransactionAmt_mean")
+    uid_std = out.get("uid_TransactionAmt_std")
+    uid_median = out.get("uid_TransactionAmt_median")
+    amt = out.get("TransactionAmt")
+
+    if amt is not None and uid_mean is not None and uid_std is not None and uid_median is not None:
+        new_cols["amt_zscore_uid"] = (amt - uid_mean) / (uid_std + eps)
+        new_cols["amt_to_mean_uid"] = amt / (uid_mean + eps)
+        new_cols["amt_to_median_uid"] = amt / (uid_median + eps)
+    elif verbose:
+        logger.warning("apply_domain_mappings: UID aggregates missing; z-scores skipped")
+
+    entities = mappings.get("entities", {})
+    global_mean = mappings.get("global_mean")
+    global_median = mappings.get("global_median")
+    if amt is not None:
+        for entity, stats in entities.items():
+            if entity not in out.columns:
                 continue
-                
-            grouped_res = df.groupby(key)[target].agg(metrics)
-            grouped_dict = grouped_res.to_dict()
-            all_rules[key][target] = grouped_dict
-            
-            for metric in metrics:
-                col_name = f'{key}_{target}_{metric}'
-                # Store in dict instead of adding to df immediately
-                new_features_data[col_name] = df[key].map(grouped_dict[metric])
+            mean_map = out[entity].map(stats["mean"])
+            if global_mean is not None:
+                mean_map = mean_map.fillna(global_mean)
+            median_map = out[entity].map(stats["median"])
+            if global_median is not None:
+                median_map = median_map.fillna(global_median)
+            new_cols[f"amt_to_mean_{entity}"] = amt / (mean_map + eps)
+            new_cols[f"amt_to_median_{entity}"] = amt / (median_map + eps)
 
-    # 3. Specific unique counts
-    for target_nunique in ['addr1', 'P_emaildomain']:
-        col_name = f'card1_{target_nunique}_nunique'
-        nunique_map = df.groupby('card1')[target_nunique].nunique().to_dict()
-        new_features_data[col_name] = df['card1'].map(nunique_map)
-        
-        if 'card1' not in all_rules: all_rules['card1'] = {}
-        all_rules['card1'][f'{target_nunique}_nunique'] = nunique_map
+    card1_c1_mean = out.get("card1_C1_mean")
+    c1 = out.get("C1")
+    if c1 is not None and card1_c1_mean is not None:
+        new_cols["c1_to_mean_card1"] = c1 / (card1_c1_mean + eps)
 
-    # 4. Single-pass concatenation to avoid fragmentation
-    if new_features_data:
-        new_df = pd.DataFrame(new_features_data, index=df.index)
-        df = pd.concat([df, new_df], axis=1)
-        new_features = list(new_features_data.keys())
-    else:
-        new_features = []
+    if amt is not None:
+        new_cols["TransactionAmt_log1p"] = np.log1p(amt)
+        decimal_part = (amt - amt.fillna(0).astype(int)) * 1000
+        new_cols["TransactionAmt_decimal"] = decimal_part.fillna(0).astype(np.int32)
 
-    def sanitize_dict(d):
-        if not isinstance(d, dict):
-            return None if pd.isna(d) else d
-        return {str(k): sanitize_dict(v) for k, v in d.items()}
+    p_email = out.get("P_emaildomain")
+    r_email = out.get("R_emaildomain")
+    if p_email is not None and r_email is not None:
+        match = (p_email.astype(str) == r_email.astype(str)).astype(np.int8)
+        match[p_email.isna() | r_email.isna()] = -1
+        new_cols["email_match"] = match
 
-    with open(export_path, 'w') as f:
-        json.dump(sanitize_dict(all_rules), f)
-        
-    logger.info("Aggregation completed", added_features=len(new_features))
-    
-    return df, new_features
+    if new_cols:
+        out = pd.concat([out, pd.DataFrame(new_cols, index=out.index)], axis=1).copy()
 
-def apply_relative_and_domain_features(
-    df: pd.DataFrame, 
-    export_path: str = "data/processed/domain_rules.json"
-) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Computes relative features
-    """
-    logger.info("Starting feature engineering (defragmented)...")
-    
-    new_features_dict = {} 
-    rules = {}
-    epsilon = 1e-6
+    if verbose:
+        logger.info(
+            "apply_domain_mappings",
+            n_rows=len(out),
+            n_new_cols=len(new_cols),
+            output_cols=out.shape[1],
+        )
+    return out
 
-    # 1. Behavioral Anomalies (Personal Norms)
-    uid_mean_col = 'uid_TransactionAmt_mean'
-    uid_std_col = 'uid_TransactionAmt_std'
-    uid_median_col = 'uid_TransactionAmt_median'
 
-    if all(col in df.columns for col in [uid_mean_col, uid_std_col, uid_median_col]):
-        new_features_dict['amt_zscore_uid'] = (df['TransactionAmt'] - df[uid_mean_col]) / (df[uid_std_col] + epsilon)
-        new_features_dict['amt_to_mean_uid'] = df['TransactionAmt'] / (df[uid_mean_col] + epsilon)
-        new_features_dict['amt_to_median_uid'] = df['TransactionAmt'] / (df[uid_median_col] + epsilon)
-    else:
-        logger.warning("Step 9 UID aggregations not found! Skipping behavioral Z-scores.")
+# ===========================================================================
+# Step 11 — time features (row-local; call per split)
+# ===========================================================================
 
-    # 2. Entity-Based Ratios (Segment Norms)
-    target_entities = ['card1', 'card2', 'addr1', 'ProductCD', 'P_emaildomain']
-    
-    for entity in target_entities:
-        if entity in df.columns:
-            group_stats = df.groupby(entity)['TransactionAmt'].agg(['mean', 'median']).to_dict()
-            rules[f'{entity}_stats'] = group_stats
-            
-            new_features_dict[f'amt_to_mean_{entity}'] = df['TransactionAmt'] / (df[entity].map(group_stats['mean']) + epsilon)
-            new_features_dict[f'amt_to_median_{entity}'] = df['TransactionAmt'] / (df[entity].map(group_stats['median']) + epsilon)
 
-    # 3. Frequency & Velocity Ratios
-    card1_c1_mean_col = 'card1_C1_mean'
-    if 'C1' in df.columns and 'card1' in df.columns:
-        if card1_c1_mean_col in df.columns:
-            new_features_dict['c1_to_mean_card1'] = df['C1'] / (df[card1_c1_mean_col] + epsilon)
-        else:
-            c1_mean = df.groupby('card1')['C1'].transform('mean')
-            new_features_dict['c1_to_mean_card1'] = df['C1'] / (c1_mean + epsilon)
+DEFAULT_TIME_RULES: dict[str, Any] = {
+    "hour_seconds": 3600,
+    "day_seconds": 86400,
+    "week_days": 7,
+    "night_range": [0, 6],
+    "weekend_start_day": 5,
+}
 
-    # 4. Domain Transformation & Identification
-    new_features_dict['TransactionAmt_log1p'] = np.log1p(df['TransactionAmt'])
-    new_features_dict['TransactionAmt_decimal'] = ((df['TransactionAmt'] - df['TransactionAmt'].astype(int)) * 1000).astype(int)
-    
-    # Email matching logic (Optimized for Series)
-    email_match = (df['P_emaildomain'].astype(str) == df['R_emaildomain'].astype(str)).astype(int)
-    mask_missing = df['P_emaildomain'].isna() | df['R_emaildomain'].isna()
-    email_match[mask_missing] = -1
-    new_features_dict['email_match'] = email_match
-
-    if new_features_dict:
-        new_df = pd.DataFrame(new_features_dict, index=df.index)
-        df = pd.concat([df, new_df], axis=1)
-        new_features = list(new_features_dict.keys())
-    else:
-        new_features = []
-
-    serialized_rules = json.loads(pd.Series(rules).to_json())
-    with open(export_path, 'w') as f:
-        json.dump(serialized_rules, f, indent=4)
-        
-    logger.info(
-        "Industry-standard features completed",
-        added_count=len(new_features),
-        final_cols=df.shape[1]
-    )
-    
-    return df, new_features
 
 def apply_time_features(
-    df: pd.DataFrame, 
-    export_path: str = "data/processed/time_rules.json"
-) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Extracts temporal features and exports constants to JSON for inference consistency.
-    Returns (DataFrame, new_features_list).
-    """
-    logger.info("Starting time-based feature engineering")
-    
-    new_features_dict = {}
-    
-    # 1. Define Time Rules (Constants that might change in the future)
-    time_rules = {
-        'hour_seconds': 3600,
-        'day_seconds': 86400,
-        'week_days': 7,
-        'night_range': [0, 6],    # 00:00 to 06:00
-        'weekend_start_day': 5    # Friday or Saturday depending on business logic
+    df: pd.DataFrame,
+    time_rules: Mapping[str, Any] | None = None,
+    export_path: str = "data/processed/time_rules.json",
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Derive cyclic and calendar features from ``TransactionDT``. Row-local."""
+    if "TransactionDT" not in df.columns:
+        if verbose:
+            logger.warning("apply_time_features: TransactionDT missing; skipping")
+        return df.copy()
+
+    rules: dict[str, Any] = dict(DEFAULT_TIME_RULES if time_rules is None else time_rules)
+
+    dt = df["TransactionDT"]
+    hour = (dt // rules["hour_seconds"]) % 24
+    dow = (dt // rules["day_seconds"]) % rules["week_days"]
+    night_lo, night_hi = rules["night_range"]
+
+    new_cols = {
+        "dt_hour": hour,
+        "dt_day_week": dow,
+        "dt_hour_sin": np.sin(2 * np.pi * hour / 24),
+        "dt_hour_cos": np.cos(2 * np.pi * hour / 24),
+        "is_night": ((hour >= night_lo) & (hour <= night_hi)).astype(np.int8),
+        "is_weekend": (dow >= rules["weekend_start_day"]).astype(np.int8),
     }
-    
-    # 2. Extract Basic Units
-    new_features_dict['dt_hour'] = (df['TransactionDT'] // time_rules['hour_seconds']) % 24
-    new_features_dict['dt_day_week'] = (df['TransactionDT'] // time_rules['day_seconds']) % time_rules['week_days']
-    
-    # 3. Cyclical Encoding (Sin-Cos)
-    # Formula: $$x_{sin} = \sin\left(\frac{2\pi \cdot x}{24}\right)$$
-    new_features_dict['dt_hour_sin'] = np.sin(2 * np.pi * new_features_dict['dt_hour'] / 24)
-    new_features_dict['dt_hour_cos'] = np.cos(2 * np.pi * new_features_dict['dt_hour'] / 24)
-    
-    new_features_dict['is_night'] = (
-        (new_features_dict['dt_hour'] >= time_rules['night_range'][0]) & 
-        (new_features_dict['dt_hour'] <= time_rules['night_range'][1])
-    ).astype(int)
-    
-    new_features_dict['is_weekend'] = (
-        new_features_dict['dt_day_week'] >= time_rules['weekend_start_day']
-    ).astype(int)
 
-    new_df = pd.DataFrame(new_features_dict, index=df.index)
-    df = pd.concat([df, new_df], axis=1)
-    
-    new_features = list(new_features_dict.keys())
+    out = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1).copy()
+    _write_json(rules, export_path)
 
-    # 6. Export Rules to JSON
-    with open(export_path, 'w') as f:
-        json.dump(time_rules, f, indent=4)
-    
-    logger.info(
-        "Time features and rules exported",
-        added_count=len(new_features),
-        export_path=export_path
-    )
-    
-    return df, new_features
+    if verbose:
+        logger.info(
+            "apply_time_features",
+            n_rows=len(out),
+            n_new_cols=len(new_cols),
+            export_path=str(export_path),
+        )
+    return out
 
-def apply_encodings(
-    df: pd.DataFrame, 
-    cat_cols: List[str],
-    export_path: str = "data/processed/encoding_rules.json"
-) -> Tuple[pd.DataFrame, List[str]]:
+
+# ===========================================================================
+# Step 12 — frequency + label encoding (fit on TRAIN, apply to all)
+# ===========================================================================
+
+
+def compute_encoding_mappings(
+    train: pd.DataFrame,
+    cat_cols: Sequence[str],
+    missing_token: str = "Unknown",
+    export_path: str = "data/processed/encoding_mappings.json",
+    verbose: bool = True,
+) -> dict[str, Any]:
+    """Fit frequency + label encodings on train only.
+
+    NaN handling: all values are first stringified via :func:`_safe_str_fill`,
+    so missing values become a real ``"Unknown"`` token (not the literal string
+    ``"nan"``). Both frequency counts and label classes are computed on this
+    cleaned representation, so train and val/test stay perfectly consistent.
+
+    Returns:
+        ``{"frequency": {col: {token: count}}, "label_classes": {col: [token,...]},
+           "missing_token": "Unknown"}``.
     """
-    Applies Frequency and Label Encoding to categorical columns.
-    Exports mapping rules for inference consistency.
-    """
-    logger.info("Starting frequency and label encoding...")
-    
-    new_features = []
-    encoding_rules = {"label_encodings": {}, "frequency_encodings": {}}
-    
+    frequency: dict[str, dict[str, int]] = {}
+    label_classes: dict[str, list[str]] = {}
+
     for col in cat_cols:
-        if col not in df.columns:
+        if col not in train.columns:
             continue
-            
-        # 1. Frequency Encoding
-        freq_map = df[col].value_counts(dropna=False).to_dict()
-        df[f'{col}_freq'] = df[col].map(freq_map)
-        new_features.append(f'{col}_freq')
-        encoding_rules["frequency_encodings"][col] = freq_map
-        
-        # 2. Label Encoding
-        le = LabelEncoder()
-        temp_series = df[col].astype(str).fillna('Unknown')
-        df[col] = le.fit_transform(temp_series)
-        
-        encoding_rules["label_encodings"][col] = le.classes_.tolist()
+        cleaned = _safe_str_fill(train[col], missing_token=missing_token)
+        frequency[col] = {str(k): int(v) for k, v in cleaned.value_counts().items()}
+        label_classes[col] = sorted(cleaned.unique().tolist())
 
-    def sanitize(obj):
-        if isinstance(obj, dict):
-            return {str(k): sanitize(v) for k, v in obj.items()}
-        return obj
+    payload = {
+        "frequency": frequency,
+        "label_classes": label_classes,
+        "missing_token": missing_token,
+    }
+    _write_json(payload, export_path)
 
-    with open(export_path, 'w') as f:
-        json.dump(sanitize(encoding_rules), f)
-        
-    logger.info(
-        "Encodings completed and rules exported",
-        encoded_cols=len(cat_cols),
-        new_freq_features=len(new_features)
-    )
-    
-    return df, new_features
+    if verbose:
+        logger.info(
+            "compute_encoding_mappings",
+            n_cols=len(label_classes),
+            missing_token=missing_token,
+            export_path=str(export_path),
+        )
+    return payload
 
-def apply_correlation_filter(
-    df: pd.DataFrame, 
-    threshold: float = 0.95,
+
+def apply_encoding_mappings(
+    df: pd.DataFrame,
+    mappings: Mapping[str, Any],
+    unknown_value: int = -1,
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Apply fitted frequency + label encodings to ``df``.
+
+    Unseen categories (present in val/test but not in train):
+        - Frequency feature: ``0``.
+        - Label feature: ``unknown_value`` (default ``-1``).
+
+    NaN values map to the ``missing_token`` from the mapping (default
+    ``"Unknown"``), so a NaN in val gets the same code as a NaN in train.
+    """
+    out = df.copy()
+    freq_maps: Mapping[str, Mapping[str, int]] = mappings.get("frequency", {})
+    class_maps: Mapping[str, list[str]] = mappings.get("label_classes", {})
+    missing_token = mappings.get("missing_token", "Unknown")
+
+    freq_new: dict[str, pd.Series] = {}
+    for col, freq_map in freq_maps.items():
+        if col not in out.columns:
+            continue
+        cleaned = _safe_str_fill(out[col], missing_token=missing_token)
+        freq_new[f"{col}_freq"] = cleaned.map(freq_map).fillna(0).astype(np.int32)
+    if freq_new:
+        out = pd.concat([out, pd.DataFrame(freq_new, index=out.index)], axis=1).copy()
+
+    for col, classes in class_maps.items():
+        if col not in out.columns:
+            continue
+        index = {cls: i for i, cls in enumerate(classes)}
+        cleaned = _safe_str_fill(out[col], missing_token=missing_token)
+        values = cleaned.map(index)
+        out[col] = values.fillna(unknown_value).astype(np.int32)
+
+    if verbose:
+        logger.info(
+            "apply_encoding_mappings",
+            n_rows=len(out),
+            n_frequency_cols=len(freq_new),
+            n_label_cols=len(class_maps),
+            output_cols=out.shape[1],
+        )
+    return out
+
+
+# ===========================================================================
+# Step 13 — correlation drop (fit list on TRAIN, drop from all splits)
+# ===========================================================================
+
+
+def compute_correlation_drop_list(
+    train: pd.DataFrame,
+    threshold: float = 0.80,
     sample_ratio: float = 0.20,
-    export_path: str = "data/processed/drop_corr.json"
-) -> Tuple[pd.DataFrame, List[str]]:
+    protected_cols: Sequence[str] = DEFAULT_EXCLUDES,
+    export_path: str = "data/processed/drop_corr.json",
+    random_state: int = 42,
+    verbose: bool = True,
+) -> list[str]:
+    """Compute the list of highly-correlated columns to drop, **from train only**.
+
+    A sampled correlation matrix keeps the computation tractable. The list is
+    then handed to :func:`apply_drop_columns` for every split so train and
+    val/test stay feature-aligned.
     """
-    Identifies and drops highly correlated features.
-    Prevents multicollinearity and reduces feature space redundancy.
+    numeric_df = train.select_dtypes(include=[np.number])
+    sample_n = max(1, int(len(numeric_df) * sample_ratio))
+    sample = numeric_df.sample(n=sample_n, random_state=random_state)
+
+    corr = sample.corr().abs()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+
+    protected = set(protected_cols)
+    to_drop = [col for col in upper.columns if col not in protected and (upper[col] > threshold).any()]
+
+    _write_json(to_drop, export_path)
+    if verbose:
+        logger.info(
+            "compute_correlation_drop_list",
+            threshold=threshold,
+            sample_rows=sample_n,
+            n_dropped=len(to_drop),
+            export_path=str(export_path),
+        )
+    return to_drop
+
+
+# ===========================================================================
+# Generic — drop a pre-computed column list (used by steps 7, 8, 13)
+# ===========================================================================
+
+
+def apply_drop_columns(
+    df: pd.DataFrame,
+    columns: Sequence[str],
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Drop a pre-computed column list (missing names are silently ignored)."""
+    present = [c for c in columns if c in df.columns]
+    out = df.drop(columns=present).copy()
+    if verbose:
+        logger.info(
+            "apply_drop_columns",
+            requested=len(columns),
+            dropped=len(present),
+            output_cols=out.shape[1],
+        )
+    return out
+
+
+# ===========================================================================
+# Optional diagnostic — adversarial validation (post feature-engineering)
+# ===========================================================================
+
+
+def apply_adversarial_validation(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    auc_threshold: float = 0.80,
+    ignore_cols: Sequence[str] = DEFAULT_EXCLUDES,
+    export_path: str = "data/processed/drop_adversarial.json",
+    random_state: int = 42,
+    verbose: bool = True,
+) -> list[str]:
+    """Identify features whose distribution shifts between ``train`` and ``test``.
+
+    For each candidate feature, train a shallow XGBoost classifier to predict
+    the split label (0 = train, 1 = test). Features whose per-feature AUC
+    exceeds ``auc_threshold`` are drift suspects and their names are returned.
+
+    Diagnostic only — drop with :func:`apply_drop_columns` if you decide to act.
     """
-    logger.info("Starting correlation analysis...", threshold=threshold, ratio=sample_ratio)
-    
-    # 1. Select only numeric columns
-    numeric_df = df.select_dtypes(include=[np.number])
-    
-    sample_n = int(len(numeric_df) * sample_ratio)
-    corr_sample = numeric_df.sample(n=sample_n, random_state=42)
-    
-    logger.info(f"Computing correlation on {sample_n} rows ({sample_ratio*100}% of data)")
-    
-    corr_matrix = corr_sample.corr().abs()
+    cols = [c for c in train.columns if c in test.columns and c not in set(ignore_cols) and c != "TransactionDT"]
+    if not cols:
+        return []
 
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    combined = pd.concat([train[cols], test[cols]], axis=0).reset_index(drop=True)
+    labels = np.concatenate([np.zeros(len(train)), np.ones(len(test))])
 
-    to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
-    
-    protected_cols = ['isFraud', 'TransactionID', 'TransactionDT']
-    to_drop = [c for c in to_drop if c not in protected_cols]
+    drift: list[str] = []
+    for col in cols:
+        dmat = xgb.DMatrix(combined[[col]].values, label=labels)
+        params = {
+            "objective": "binary:logistic",
+            "eval_metric": "auc",
+            "verbosity": 0,
+            "tree_method": "hist",
+            "seed": random_state,
+        }
+        cv_results = xgb.cv(params, dmat, num_boost_round=10, nfold=3, seed=random_state)
+        auc = float(cv_results["test-auc-mean"].iloc[-1])  # type: ignore[union-attr]
+        if auc > auc_threshold:
+            drift.append(col)
+            if verbose:
+                logger.warning("adversarial.drift_detected", column=col, auc=round(auc, 4))
 
-    df_filtered = df.drop(columns=to_drop)
-    df_filtered = df_filtered.copy()
+    _write_json(drift, export_path)
+    if verbose:
+        logger.info(
+            "apply_adversarial_validation",
+            n_dropped=len(drift),
+            export_path=str(export_path),
+        )
+    return drift
 
-    # 8. Export rules
-    with open(export_path, 'w') as f:
-        json.dump(to_drop, f, indent=4)
-        
-    logger.info(
-        "Correlation filter completed",
-        dropped_count=len(to_drop),
-        remaining_cols=df_filtered.shape[1]
-    )
-    
-    return df_filtered, to_drop
+
+def _calculate_single_psi(expected: pd.Series, actual: pd.Series, buckets: int = 10) -> float:
+    """
+    Computes the Population Stability Index for a single feature.
+    """
+    expected = expected.dropna()
+    actual = actual.dropna()
+
+    if len(expected) == 0 or len(actual) == 0:
+        return 999.0
+
+    expected_percents, _ = np.histogram(expected, bins=buckets)
+    actual_percents, _ = np.histogram(actual, bins=buckets)
+
+    expected_percents = expected_percents / len(expected)
+    actual_percents = actual_percents / len(actual)
+
+    expected_percents = np.clip(expected_percents, 1e-6, 1)
+    actual_percents = np.clip(actual_percents, 1e-6, 1)
+
+    psi_value = np.sum((actual_percents - expected_percents) * np.log(actual_percents / expected_percents))
+    return float(psi_value)
+
+
+def apply_psi_validation(
+    train_df: pd.DataFrame, val_df: pd.DataFrame, psi_threshold: float = 0.10, export_path: str | None = None
+) -> list[str]:
+    """
+    Identifies and returns columns with a PSI value greater than the threshold.
+    Exports the list to a JSON file if export_path is provided.
+    """
+    logger.info("Starting PSI validation...", threshold=psi_threshold)
+
+    drift_cols = []
+    ignore_cols = ["isFraud", "TransactionID", "TransactionDT", "uid"]
+    features = [c for c in train_df.columns if c not in ignore_cols]
+
+    for col in features:
+        psi_val = _calculate_single_psi(train_df[col], val_df[col])
+        if psi_val > psi_threshold:
+            logger.warning("psi.drift_detected", column=col, psi=round(psi_val, 4))
+            drift_cols.append(col)
+
+    logger.info("PSI validation finished.", dropped_count=len(drift_cols))
+
+    if export_path:
+        with open(export_path, "w") as f:
+            json.dump({"psi_drift_columns": drift_cols}, f, indent=4)
+        logger.info("PSI drops exported.", path=export_path)
+
+    return drift_cols
