@@ -685,10 +685,7 @@ def _apply_aggregations_to_train(
         oof_group_keys = [k for k in group_keys if k in oof_set]
         oof_nunique_pairs = [p for p in nunique_pairs if p[0] in oof_set]
 
-        oof_buffers: dict[str, np.ndarray] = {
-            col_name: np.full(n, np.nan, dtype="float32")
-            for col_name in _added_agg_column_names(train, oof_group_keys, agg_spec, oof_nunique_pairs)
-        }
+        oof_buffers: dict[str, np.ndarray] = {col_name: np.full(n, np.nan, dtype="float32") for col_name in _added_agg_column_names(train, oof_group_keys, agg_spec, oof_nunique_pairs)}
 
         sort_pos = np.argsort(train[time_col].to_numpy(), kind="stable")
         sorted_train = train.iloc[sort_pos]
@@ -1293,9 +1290,7 @@ def _calculate_single_psi(expected: pd.Series, actual: pd.Series, buckets: int =
     return float(psi_value)
 
 
-def apply_psi_validation(
-    train_df: pd.DataFrame, val_df: pd.DataFrame, psi_threshold: float = 0.10, export_path: str | None = None
-) -> list[str]:
+def apply_psi_validation(train_df: pd.DataFrame, val_df: pd.DataFrame, psi_threshold: float = 0.10, export_path: str | None = None) -> list[str]:
     """
     Identifies and returns columns with a PSI value greater than the threshold.
     Exports the list to a JSON file if export_path is provided.
