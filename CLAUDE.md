@@ -47,3 +47,13 @@ All calls traced via LangSmith, models versioned in MLflow.
 - .env for secrets, never hardcode — see .env.example
 - data/raw/ and data/processed/ are gitignored
 - Docker services: postgres:5432, redis:6379, qdrant:6333, mlflow:5000
+
+## Ruff lint kuralları (Python 3.11+)
+
+- `from typing import Tuple, List, Dict` kullanma → direkt `tuple`, `list`, `dict` yaz
+- f-string içinde placeholder yoksa `f` prefix koyma → `print("text")` yaz
+- Import sırası: stdlib → third-party → local, aralarında boş satır
+- Satır max 1000 karakter
+- Kullanılmayan import ekleme
+- Loop variable kullanılmıyorsa `_` ile başlat → `for _key, val in ...`
+- Lint fix komutu: `uv run ruff check . --fix --unsafe-fixes`

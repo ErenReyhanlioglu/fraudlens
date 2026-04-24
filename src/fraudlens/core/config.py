@@ -22,12 +22,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_env: Literal["development", "staging", "production"] = Field(
-        default="development", alias="APP_ENV"
-    )
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO", alias="LOG_LEVEL"
-    )
+    app_env: Literal["development", "staging", "production"] = Field(default="development", alias="APP_ENV")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO", alias="LOG_LEVEL")
 
     # Postgres
     postgres_user: str = Field(alias="POSTGRES_USER")
@@ -54,9 +50,7 @@ class Settings(BaseSettings):
 
     # Anthropic
     anthropic_api_key: SecretStr = Field(default=SecretStr(""), alias="ANTHROPIC_API_KEY")
-    anthropic_model_haiku: str = Field(
-        default="claude-haiku-4-5-20251001", alias="ANTHROPIC_MODEL_HAIKU"
-    )
+    anthropic_model_haiku: str = Field(default="claude-haiku-4-5-20251001", alias="ANTHROPIC_MODEL_HAIKU")
     anthropic_model_sonnet: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL_SONNET")
 
     # LangSmith
@@ -68,10 +62,7 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         """Async SQLAlchemy DSN for the Postgres instance."""
         password = self.postgres_password.get_secret_value()
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        return f"postgresql+asyncpg://{self.postgres_user}:{password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @property
     def redis_url(self) -> str:
