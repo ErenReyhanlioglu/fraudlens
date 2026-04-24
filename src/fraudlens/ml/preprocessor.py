@@ -1,6 +1,6 @@
 """Preprocessing utilities for tabular fraud data.
 
-Pipeline ordering (CRITICAL — leakage-safe by construction):
+Pipeline ordering:
 
     Pre-split (only row-local or deterministic operations):
         1. reduce_mem_usage
