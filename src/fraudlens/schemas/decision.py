@@ -74,7 +74,14 @@ class DecisionRead(BaseModel):
     outcome: DecisionOutcome
     shap_values: dict[str, float]
     agent_used: AgentType
+    model_name: str | None
+    decision_hint: str | None
+    confidence: float | None
     reasoning: str | None
+    evidence: list[str]
+    red_flags: list[str]
+    tools_called: list[str]
+    tool_trace: list[dict]
     regulatory_citations: list[Regulatorycitation]
     processing_time_ms: float
     created_at: datetime

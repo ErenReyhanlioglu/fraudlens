@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -107,11 +107,14 @@ class TransactionResponse(BaseModel):
 
     transaction_id: str | uuid.UUID
     decision_id: str | uuid.UUID
-    
+
     received_at: datetime
-    
+
     fraud_probability: float = Field(ge=0.0, le=1.0)
     risk_tier: str
     triage_action: str
     shap_top_features: list[ShapFeature]
     processing_time_ms: float
+
+    # Populated only for INVESTIGATE / ESCALATE triage actions.
+    investigation: Any | None = None
