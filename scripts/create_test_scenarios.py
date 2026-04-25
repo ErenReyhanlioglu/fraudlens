@@ -37,12 +37,14 @@ _APPROVE_THRESHOLD = 0.3
 _ESCALATE_THRESHOLD = 0.7
 
 BUCKETS: list[tuple[str, float, float]] = [
-    ("approve_low", 0.0, 0.1),
-    ("approve_high", 0.1, 0.3),
-    ("investigate_low", 0.3, 0.5),
-    ("investigate_high", 0.5, 0.7),
-    ("critical_low", 0.7, 0.85),
-    ("critical_high", 0.85, 1.0),
+    ("approve_low",       0.00, 0.10),
+    ("approve_high",      0.10, 0.30),
+    ("investigate_30_40", 0.30, 0.40),
+    ("investigate_40_50", 0.40, 0.50),
+    ("investigate_50_60", 0.50, 0.60),
+    ("investigate_60_70", 0.60, 0.70),
+    ("critical_low",      0.70, 0.85),
+    ("critical_high",     0.85, 1.00),
 ]
 
 SAMPLES_PER_BUCKET = 50
@@ -54,6 +56,24 @@ def triage(prob: float) -> str:
     if prob < _ESCALATE_THRESHOLD:
         return "investigate"
     return "escalate"
+
+
+def bucket_label(prob: float) -> str:
+    if prob < 0.10:
+        return "approve_low"
+    if prob < 0.30:
+        return "approve_high"
+    if prob < 0.40:
+        return "investigate_30_40"
+    if prob < 0.50:
+        return "investigate_40_50"
+    if prob < 0.60:
+        return "investigate_50_60"
+    if prob < 0.70:
+        return "investigate_60_70"
+    if prob < 0.85:
+        return "critical_low"
+    return "critical_high"
 
 
 def load_model(path: Path) -> tuple[xgb.XGBClassifier | xgb.Booster, list[str]]:
@@ -159,7 +179,7 @@ def main() -> None:
         for row in scenarios:
             fh.write(json.dumps(row) + "\n")
 
-    print(f"\nWrote {len(scenarios)} scenarios → {OUT_PATH}")
+    print(f"\nWrote {len(scenarios)} scenarios -> {OUT_PATH}")
 
 
 if __name__ == "__main__":
