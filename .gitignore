@@ -24,3 +24,21 @@ dist/
 
 # uv init default
 main.py
+
+# ML artifacts
+*.joblib
+*.pkl
+*.model
+mlruns/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
