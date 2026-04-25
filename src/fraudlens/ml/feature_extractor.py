@@ -303,3 +303,130 @@ class InferenceExtractor:
         }
 
         return pd.DataFrame([row])
+
+
+# ---------------------------------------------------------------------------
+# Banking context enrichment (IEEE-CIS → human-readable agent payload)
+# ---------------------------------------------------------------------------
+
+# ProductCD label classes in the order stored by encoding_mappings.json.
+# Used to reverse the label-encoded integer back to the code letter.
+_PRODUCTCD_CLASSES: list[str] = []
+
+_PRODUCTCD_TO_TYPE: dict[str, str] = {
+    "W": "transfer",
+    "C": "payment",
+    "H": "purchase",
+    "S": "deposit",
+    "R": "refund",
+}
+
+
+def _load_productcd_classes() -> list[str]:
+    global _PRODUCTCD_CLASSES
+    if _PRODUCTCD_CLASSES:
+        return _PRODUCTCD_CLASSES
+    try:
+        path = Path("data/processed/encoding_mappings.json")
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        _PRODUCTCD_CLASSES = data.get("label_classes", {}).get("ProductCD", [])
+    except Exception:
+        pass
+    if not _PRODUCTCD_CLASSES:
+        _PRODUCTCD_CLASSES = ["C", "H", "R", "S", "W"]
+    return _PRODUCTCD_CLASSES
+
+
+def _reconstruct_hour(raw: dict[str, Any]) -> int | None:
+    """Estimate hour-of-day from dt_hour_sin / dt_hour_cos encoding.
+
+    Returns None when either component is missing.
+    """
+    import math
+
+    sin_val = raw.get("dt_hour_sin")
+    cos_val = raw.get("dt_hour_cos")
+    if sin_val is None or cos_val is None:
+        return None
+    try:
+        angle = math.atan2(float(sin_val), float(cos_val))
+        return round(angle * 24 / (2 * math.pi)) % 24
+    except (TypeError, ValueError):
+        return None
+
+
+def enrich_with_context(raw_features: dict[str, Any]) -> dict[str, Any]:
+    """Derive a human-readable banking context dict from IEEE-CIS raw features.
+
+    Produces a deterministic, ~13-field dict suitable for passing to the
+    investigation agent instead of the full 79-feature vector.  NaN / None
+    values are replaced with sensible defaults; no exceptions are raised.
+
+    Args:
+        raw_features: Dict of IEEE-CIS feature name → value (as stored in
+            test_scenarios.jsonl or returned by score_raw).
+
+    Returns:
+        Banking context dict with keys: customer_avg_amount, amount_note,
+        timestamp, transaction_type, sender_account_id, merchant_id,
+        ip_address, device_fingerprint, sender_country, receiver_country,
+        currency, channel, is_weekend, is_night, hour_of_day.
+    """
+    def _safe_int(val: Any, default: int = 0) -> int:
+        try:
+            if val is None:
+                return default
+            f = float(val)
+            return default if f != f else int(f)  # NaN check
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_float(val: Any, default: float = 0.0) -> float:
+        try:
+            if val is None:
+                return default
+            f = float(val)
+            return default if f != f else f
+        except (TypeError, ValueError):
+            return default
+
+    customer_avg_amount = round(_safe_float(raw_features.get("uid_TransactionAmt_mean"), 0.0), 2)
+
+    dt_val = raw_features.get("TransactionDT")
+    if dt_val is not None:
+        try:
+            from datetime import timedelta
+            ts = _REFERENCE_EPOCH + timedelta(seconds=float(dt_val))
+            timestamp = ts.isoformat()
+        except Exception:
+            timestamp = _REFERENCE_EPOCH.isoformat()
+    else:
+        timestamp = _REFERENCE_EPOCH.isoformat()
+
+    classes = _load_productcd_classes()
+    product_cd_idx = _safe_int(raw_features.get("ProductCD"), -1)
+    product_cd = classes[product_cd_idx] if 0 <= product_cd_idx < len(classes) else "W"
+    transaction_type = _PRODUCTCD_TO_TYPE.get(product_cd, "transfer")
+
+    card1 = _safe_int(raw_features.get("card1"), 0)
+    addr1 = _safe_int(raw_features.get("addr1"), 0)
+    device_info = _safe_int(raw_features.get("DeviceInfo"), 0)
+
+    return {
+        "customer_avg_amount": customer_avg_amount,
+        "amount_note": "exact transaction amount unavailable; customer average shown",
+        "timestamp": timestamp,
+        "transaction_type": transaction_type,
+        "sender_account_id": f"ACC-{card1}",
+        "merchant_id": f"MERCH-{card1 % 1000:04d}",
+        "ip_address": f"192.168.{card1 % 255}.{addr1 % 255}",
+        "device_fingerprint": f"DEV-{device_info}",
+        "sender_country": "US",
+        "receiver_country": "US",
+        "currency": "USD",
+        "channel": "api",
+        "is_weekend": bool(_safe_int(raw_features.get("is_weekend"), 0)),
+        "is_night": bool(_safe_int(raw_features.get("is_night"), 0)),
+        "hour_of_day": _reconstruct_hour(raw_features),
+    }
