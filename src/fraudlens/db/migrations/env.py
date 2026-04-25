@@ -10,8 +10,6 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Import Base and all models so autogenerate can detect them.
-import fraudlens.db.models  # noqa: F401 — registers Decision on Base.metadata
 from fraudlens.core.config import get_settings
 from fraudlens.db.session import Base
 

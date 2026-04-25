@@ -34,7 +34,17 @@ class Decision(Base):
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
     shap_values: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     agent_used: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    model_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Investigation result fields (null for auto-approved transactions)
+    decision_hint: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    red_flags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    tools_called: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    tool_trace: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
     regulatory_citations: Mapped[list] = mapped_column(
         JSONB, nullable=False, default=list
     )
