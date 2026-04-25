@@ -6,12 +6,17 @@ import time
 import uuid
 from datetime import UTC, datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fraudlens.agents.graph import run_fraud_investigation
 from fraudlens.api.deps import extractor, scorer
+from fraudlens.core.config import get_settings
 from fraudlens.db.models import Decision
 from fraudlens.db.session import get_db
+from fraudlens.ml.feature_extractor import enrich_with_context
+from fraudlens.ml.shap_vocab import annotate_shap
 from fraudlens.schemas.decision import (
     AgentType,
     DecisionOutcome,
@@ -19,7 +24,10 @@ from fraudlens.schemas.decision import (
     RiskTier,
     TriageAction,
 )
+from fraudlens.schemas.investigation import DecisionHint
 from fraudlens.schemas.transaction import TransactionRequest, TransactionResponse
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["transactions"])
 
@@ -40,6 +48,13 @@ def _triage(prob: float) -> tuple[RiskTier, TriageAction]:
     return RiskTier.HIGH, TriageAction.ESCALATE
 
 
+_HINT_TO_OUTCOME: dict[DecisionHint, DecisionOutcome] = {
+    DecisionHint.LIKELY_LEGITIMATE: DecisionOutcome.APPROVE,
+    DecisionHint.SUSPICIOUS: DecisionOutcome.ESCALATE,
+    DecisionHint.INCONCLUSIVE: DecisionOutcome.MANUAL_REVIEW,
+}
+
+
 # ---------------------------------------------------------------------------
 # POST /transactions
 # ---------------------------------------------------------------------------
@@ -48,8 +63,8 @@ def _triage(prob: float) -> tuple[RiskTier, TriageAction]:
 @router.post("/transactions", response_model=TransactionResponse, status_code=201)
 async def submit_transaction(
     payload: TransactionRequest,
-    db: AsyncSession = Depends(get_db),  
-    raw_mode: bool = Query(default=False, description="Bypass InferenceExtractor and score payload.raw_features directly"),  
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+    raw_mode: bool = Query(default=False, description="Bypass InferenceExtractor and score payload.raw_features directly"),  # noqa: B008
 ) -> TransactionResponse:
     """Score a transaction and persist the decision.
 
@@ -58,6 +73,7 @@ async def submit_transaction(
     to bypass the InferenceExtractor (useful for demos and integration tests).
     """
     t0 = time.perf_counter()
+    settings = get_settings()
 
     if raw_mode:
         if not payload.raw_features:
@@ -71,7 +87,7 @@ async def submit_transaction(
         prob, shap_features = await scorer.score_async(feature_row)
     risk_tier, triage_action = _triage(prob)
 
-    # Immediate outcome for auto-approve; agents will overwrite for others.
+    # Auto-approve immediately; agents below will override for non-trivial cases.
     outcome = (
         DecisionOutcome.APPROVE
         if triage_action is TriageAction.APPROVE
@@ -80,8 +96,7 @@ async def submit_transaction(
         else DecisionOutcome.MANUAL_REVIEW
     )
 
-    elapsed_ms = (time.perf_counter() - t0) * 1000
-
+    shap_dict = {f.feature: f.contribution for f in shap_features}
     decision_id = uuid.uuid4()
     decision = Decision(
         id=decision_id,
@@ -90,12 +105,65 @@ async def submit_transaction(
         risk_tier=risk_tier.value,
         triage_action=triage_action.value,
         outcome=outcome.value,
-        shap_values={f.feature: f.contribution for f in shap_features},
+        shap_values=shap_dict,
         agent_used=AgentType.NONE.value,
-        processing_time_ms=elapsed_ms,
+        processing_time_ms=(time.perf_counter() - t0) * 1000,
         regulatory_citations=[],
     )
     db.add(decision)
+
+    investigation_result = None
+    if triage_action in (TriageAction.INVESTIGATE, TriageAction.ESCALATE):
+        agent_type = AgentType.INVESTIGATION if triage_action is TriageAction.INVESTIGATE else AgentType.CRITICAL
+
+        shap_signals = annotate_shap(
+            [{"feature": f.feature, "shap": f.contribution} for f in shap_features]
+        )
+        if raw_mode and payload.raw_features:
+            banking_context = enrich_with_context(payload.raw_features)
+        else:
+            banking_context = {
+                "amount": payload.amount,
+                "timestamp": payload.timestamp,
+                "transaction_type": payload.transaction_type,
+                "sender_account_id": payload.sender_account_id,
+                "merchant_id": payload.merchant_id,
+                "ip_address": payload.ip_address,
+                "device_fingerprint": payload.device_fingerprint,
+                "sender_country": payload.sender_country,
+                "receiver_country": payload.receiver_country,
+                "currency": payload.currency,
+                "channel": payload.channel,
+            }
+        agent_context = {
+            **banking_context,
+            "ml_score": prob,
+            "shap_signals": shap_signals,
+            "transaction_id": str(payload.transaction_id),
+        }
+
+        try:
+            investigation_result = await run_fraud_investigation(
+                transaction_id=str(payload.transaction_id),
+                fraud_probability=prob,
+                shap_values=shap_dict,
+                transaction_context=agent_context,
+                triage_action=triage_action.value,
+            )
+            decision.agent_used = agent_type.value
+            decision.model_name = settings.anthropic_model_haiku
+            decision.decision_hint = investigation_result.decision_hint.value
+            decision.confidence = investigation_result.confidence
+            decision.reasoning = investigation_result.reasoning_summary
+            decision.evidence = list(investigation_result.evidence)
+            decision.red_flags = list(investigation_result.red_flags)
+            decision.tools_called = list(investigation_result.tools_called)
+            decision.tool_trace = [dict(t) for t in investigation_result.tool_trace]
+            decision.outcome = _HINT_TO_OUTCOME[investigation_result.decision_hint].value
+        except Exception:
+            logger.exception("agent_dispatch_failed", transaction_id=str(payload.transaction_id))
+
+    decision.processing_time_ms = (time.perf_counter() - t0) * 1000
     # session commits via get_db dependency on clean exit
 
     return TransactionResponse(
@@ -106,7 +174,8 @@ async def submit_transaction(
         risk_tier=risk_tier.value,
         triage_action=triage_action.value,
         shap_top_features=shap_features,
-        processing_time_ms=elapsed_ms,
+        processing_time_ms=decision.processing_time_ms,
+        investigation=investigation_result,
     )
 
 
@@ -118,7 +187,7 @@ async def submit_transaction(
 @router.get("/decisions/{decision_id}", response_model=DecisionRead)
 async def get_decision(
     decision_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),  
+    db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> DecisionRead:
     """Fetch a previously created decision by its UUID."""
     result = await db.get(Decision, decision_id)
