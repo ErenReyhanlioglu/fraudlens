@@ -1,16 +1,20 @@
 #!/usr/bin/env python
-"""FraudLens end-to-end smoke test / health probe.
+"""FraudLens Critical Agent health probe.
 
 Usage:
-    uv run scripts/healthcheck.py [--port PORT] [--host HOST] [--no-langsmith]
-                                  [--reliability-samples N] [--seed S]
+    uv run scripts/critical_agent_healthcheck.py [--port PORT] [--host HOST]
+                                                  [--no-langsmith] [--seed S]
 
 Sections:
-  INFRASTRUCTURE        — TCP reachability for PostgreSQL and Redis
-  TRIAGE ROUTING        — 1 POST per bucket, validates expected triage_action
-  AGENT INVESTIGATION   — detailed tool trace + verdict for investigate/escalate buckets
-  STRUCTURED OUTPUT     — validates InvestigationResult fields on 5 investigate transactions
-  LANGSMITH             — verifies traces appeared in the fraudlens project
+  INFRASTRUCTURE          — TCP reachability for PostgreSQL, Redis, Qdrant
+  TRIAGE ROUTING          — 1 POST per critical bucket, validates triage_action=escalate
+  CRITICAL AGENT DETAIL   — full 8-tool trace with network/RAG/sanctions display
+  MANDATORY TOOLS CHECK   — verifies customer_history, adverse_media, network_analysis called
+  STRUCTURED OUTPUT       — validates InvestigationResult fields for critical tier
+  LANGSMITH               — verifies traces appeared in the fraudlens project
+
+Tests only the Critical Agent (p >= 0.7, 8 tools, claude-haiku-4-5).
+For the Investigation Agent use: uv run scripts/investigator_agent_healthcheck.py
 
 Exit code: 0 = all checks passed, 1 = any failure.
 """
@@ -35,24 +39,14 @@ REPO_ROOT = Path(__file__).parent.parent
 SCENARIOS_PATH = REPO_ROOT / "data" / "processed" / "test_scenarios.jsonl"
 ENV_PATH = REPO_ROOT / ".env"
 
-BUCKET_ORDER = [
-    "investigate_30_40",
-    "investigate_40_50",
-    "investigate_50_60",
-    "investigate_60_70",
-]
+CRITICAL_BUCKETS = ["critical_low", "critical_high"]
 BUCKET_TRIAGE = {
-    "approve_low":       "approve",
-    "approve_high":      "approve",
-    "investigate_30_40": "investigate",
-    "investigate_40_50": "investigate",
-    "investigate_50_60": "investigate",
-    "investigate_60_70": "investigate",
-    "critical_low":      "escalate",
-    "critical_high":     "escalate",
+    "critical_low": "escalate",
+    "critical_high": "escalate",
 }
-AGENT_BUCKETS = {"investigate_30_40", "investigate_40_50", "investigate_50_60", "investigate_60_70", "critical_low", "critical_high"}
-INVESTIGATE_BUCKETS = {"investigate_30_40", "investigate_40_50", "investigate_50_60", "investigate_60_70"}
+
+# Tools that MUST be called by the Critical Agent (compliance requirement).
+MANDATORY_TOOLS = {"get_customer_history", "adverse_media_search", "deep_network_analysis"}
 
 _TX_BASE: dict[str, Any] = {
     "timestamp": "2024-01-15T10:00:00Z",
@@ -76,6 +70,7 @@ _G = "\033[92m"
 _R = "\033[91m"
 _Y = "\033[93m"
 _C = "\033[96m"
+_M = "\033[95m"
 _B = "\033[1m"
 _D = "\033[2m"
 _X = "\033[0m"
@@ -101,13 +96,17 @@ def _cyan(s: str) -> str:
     return f"{_C}{s}{_X}"
 
 
+def _magenta(s: str) -> str:
+    return f"{_M}{s}{_X}"
+
+
 # ---------------------------------------------------------------------------
 # Scenario loading
 # ---------------------------------------------------------------------------
 
 
 def load_scenarios() -> dict[str, list[dict[str, Any]]]:
-    buckets: dict[str, list[dict[str, Any]]] = {b: [] for b in BUCKET_ORDER}
+    buckets: dict[str, list[dict[str, Any]]] = {b: [] for b in CRITICAL_BUCKETS}
     with SCENARIOS_PATH.open(encoding="utf-8") as fh:
         for line in fh:
             row = json.loads(line)
@@ -141,6 +140,7 @@ def run_infra_checks(env: dict[str, str]) -> tuple[int, int]:
     checks = [
         ("PostgreSQL", env.get("POSTGRES_HOST", "localhost"), int(env.get("POSTGRES_PORT", "5432"))),
         ("Redis", env.get("REDIS_HOST", "localhost"), int(env.get("REDIS_PORT", "6379"))),
+        ("Qdrant", env.get("QDRANT_HOST", "localhost"), int(env.get("QDRANT_PORT", "6333"))),
     ]
     for name, host, port in checks:
         total += 1
@@ -176,7 +176,7 @@ async def _post_one(
     client: httpx.AsyncClient,
     base_url: str,
     payload: dict[str, Any],
-    timeout: float = 90.0,  # noqa: ASYNC109
+    timeout: float = 120.0,  # noqa: ASYNC109 — critical agent calls 4–6 tools
 ) -> dict[str, Any]:
     try:
         resp = await client.post(
@@ -189,6 +189,85 @@ async def _post_one(
         return resp.json()
     except Exception as exc:
         return {"_error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Tool result formatting — all 8 tools
+# ---------------------------------------------------------------------------
+
+
+def _fmt_tool_result(tool: str, result_str: str) -> list[str]:
+    """Return formatted display lines for a tool's raw JSON result."""
+    try:
+        data = json.loads(result_str)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return [_dim(str(result_str)[:120])]
+
+    lines: list[str] = []
+
+    if tool == "explain_ml_score":
+        for feat in (data.get("top_features") or [])[:3]:
+            val = feat.get("shap_contribution", 0)
+            sign = "+" if val > 0 else ""
+            direction = "→ fraud" if val > 0 else "→ legit"
+            lines.append(f"{feat['feature']} = {sign}{val:.4f}  {_dim(direction)}")
+
+    elif tool == "get_customer_history":
+        lines.append(f"tx_count={data.get('transaction_count')}  avg_amount=${data.get('average_transaction_amount_usd')}  prior_flags={data.get('prior_suspicious_flags')}")
+        lines.append(f"countries={data.get('countries_transacted')}  account_age={data.get('account_age_days')}d")
+
+    elif tool == "check_merchant_reputation":
+        lines.append(f"risk_score={data.get('risk_score')}  category={data.get('industry_category')}  chargebacks={data.get('chargeback_rate_pct')}%")
+        flags = data.get("flags") or []
+        if flags:
+            lines.append(f"flags={flags}")
+
+    elif tool == "get_geolocation_context":
+        lines.append(f"ip_country={data.get('ip_country')}  vpn={data.get('vpn_detected')}  impossible_travel={data.get('impossible_travel')}")
+        signals = data.get("risk_signals") or []
+        if signals:
+            lines.append(f"signals={signals}")
+
+    elif tool == "find_similar_patterns":
+        patterns = data.get("patterns") or []
+        lines.append(f"match_count={data.get('match_count')}  risk_level={data.get('risk_level')}  patterns={patterns}")
+
+    elif tool == "deep_network_analysis":
+        risk_level = data.get("risk_level", "?")
+        risk_color = _R if risk_level == "high" else (_Y if risk_level == "medium" else _G)
+        lines.append(f"nodes={data.get('node_count')}  edges={data.get('edge_count')}  density={data.get('graph_density')}  risk={risk_color}{risk_level}{_X}")
+        signals = data.get("risk_signals") or []
+        if signals:
+            lines.append(f"signals={signals}")
+        lines.append(_dim(data.get("risk_assessment", "")))
+
+    elif tool == "regulatory_policy_rag":
+        excerpts = data.get("excerpts") or []
+        if excerpts:
+            for ex in excerpts[:2]:
+                citation = ex.get("citation", "?")
+                score = ex.get("relevance_score", 0.0)
+                text_preview = ex.get("text", "")[:90].replace("\n", " ")
+                lines.append(f"{_magenta(citation)}  score={score}")
+                lines.append(f"  {_dim(text_preview)}...")
+        else:
+            lines.append(_dim(data.get("message", "no results")))
+
+    elif tool == "adverse_media_search":
+        risk_level = data.get("overall_risk_level", "?")
+        risk_color = _R if risk_level in ("critical", "high") else _G
+        sanctions = data.get("sanctions_match", False)
+        pep = data.get("pep_flag", False)
+        adverse_n = data.get("adverse_media_hit_count", 0)
+        lines.append(f"risk={risk_color}{risk_level}{_X}  sanctions={_R + 'YES' + _X if sanctions else 'no'}  pep={_Y + 'YES' + _X if pep else 'no'}  adverse_hits={adverse_n}")
+        hits = data.get("sanctions_list_hits") or []
+        if hits:
+            lines.append(f"{_R}SANCTIONS HIT: {hits}{_X}")
+        cats = data.get("adverse_media_categories") or []
+        if cats:
+            lines.append(f"media_categories={cats}")
+
+    return lines or [_dim(str(result_str)[:120])]
 
 
 # ---------------------------------------------------------------------------
@@ -207,18 +286,17 @@ def print_routing_section(
         expected = BUCKET_TRIAGE[bucket]
         if "_error" in api_resp:
             err = api_resp["_error"][:60]
-            print(f"  {_fail(f'{bucket:<22} API error: {err}')}")
+            print(f"  {_fail(f'{bucket:<18} API error: {err}')}")
             continue
 
         actual = api_resp.get("triage_action", "?")
         prob = api_resp.get("fraud_probability", -1.0)
         inv = api_resp.get("investigation")
         hint_tag = f"  hint={inv['decision_hint']}" if inv and inv.get("decision_hint") else ""
-        inv_tag = "  investigation=None" if inv is None and actual == "approve" else ""
         is_ok = actual == expected
 
         parts = [f"score={prob:.3f}", f"action={actual}", f"is_fraud={scenario['is_fraud']}"]
-        line = f"{bucket:<22}  {'  '.join(parts)}{hint_tag}{inv_tag}"
+        line = f"{bucket:<18}  {'  '.join(parts)}{hint_tag}"
         if is_ok:
             passed += 1
             print(f"  {_ok(line)}")
@@ -229,75 +307,19 @@ def print_routing_section(
 
 
 # ---------------------------------------------------------------------------
-# Tool result formatting
+# Critical agent detail section
 # ---------------------------------------------------------------------------
 
 
-def _fmt_tool_result(tool: str, result_str: str) -> list[str]:
-    """Return 1-3 display lines summarising a tool's raw JSON result."""
-    try:
-        data = json.loads(result_str)
-    except (json.JSONDecodeError, ValueError, TypeError):
-        return [_dim(str(result_str)[:100])]
-
-    lines: list[str] = []
-    if tool == "explain_ml_score":
-        for feat in (data.get("top_features") or [])[:3]:
-            val = feat.get("shap_contribution", 0)
-            sign = "+" if val > 0 else ""
-            direction = "→ fraud" if val > 0 else "→ legit"
-            lines.append(f"{feat['feature']} = {sign}{val:.4f}  {_dim(direction)}")
-    elif tool == "get_customer_history":
-        lines.append(
-            f"tx_count={data.get('transaction_count')}  "
-            f"avg_amount=${data.get('average_transaction_amount_usd')}  "
-            f"prior_flags={data.get('prior_suspicious_flags')}"
-        )
-        lines.append(f"countries={data.get('countries_transacted')}")
-    elif tool == "check_merchant_reputation":
-        lines.append(
-            f"risk_score={data.get('risk_score')}  "
-            f"category={data.get('industry_category')}  "
-            f"chargebacks={data.get('chargeback_rate_pct')}%"
-        )
-        flags = data.get("flags") or []
-        if flags:
-            lines.append(f"flags={flags}")
-    elif tool == "get_geolocation_context":
-        lines.append(
-            f"ip_country={data.get('ip_country')}  "
-            f"vpn={data.get('vpn_detected')}  "
-            f"impossible_travel={data.get('impossible_travel')}"
-        )
-        signals = data.get("risk_signals") or []
-        if signals:
-            lines.append(f"signals={signals}")
-    elif tool == "find_similar_patterns":
-        cases = data.get("similar_cases") or []
-        if cases:
-            top = cases[0]
-            lines.append(
-                f"{top.get('case_id')}  sim={top.get('similarity_score')}  "
-                f"fraud_confirmed={top.get('fraud_confirmed')}  "
-                f"modus={top.get('modus_operandi')}"
-            )
-    return lines or [_dim(str(result_str)[:100])]
-
-
-# ---------------------------------------------------------------------------
-# Agent investigation section
-# ---------------------------------------------------------------------------
-
-
-def _print_single_agent(bucket: str, scenario: dict[str, Any], api_resp: dict[str, Any]) -> None:
+def _print_single_critical(bucket: str, scenario: dict[str, Any], api_resp: dict[str, Any]) -> None:
     inv = api_resp.get("investigation")
     prob = api_resp.get("fraud_probability", 0.0)
-
     is_fraud = scenario["is_fraud"]
-    print(f"\n  {_B}[AGENT INVESTIGATION — {bucket}]{_X}  {_dim(f'score={prob:.4f}  is_fraud={is_fraud}')}")
+
+    print(f"\n  {_B}[CRITICAL AGENT — {bucket}]{_X}  {_dim(f'score={prob:.4f}  is_fraud={is_fraud}')}")
 
     if not inv:
-        print(f"  {_warn('investigation=None (agent did not run or failed)')}")
+        print(f"  {_warn('investigation=None (critical agent did not run or failed)')}")
         return
 
     hint = inv.get("decision_hint", "?")
@@ -313,6 +335,7 @@ def _print_single_agent(bucket: str, scenario: dict[str, Any], api_resp: dict[st
     print(f"  Decision hint  : {hint_color}{hint}{_X}")
     print(f"  Confidence     : {conf:.2f}")
     print(f"  Tools called   : {' → '.join(tools) if tools else _dim('(none)')}")
+    print(f"  Tool count     : {len(tools)}/8  {_dim('(critical tier should use 4–6)')}")
 
     if tool_trace:
         print(f"\n  {_D}Tool trace:{_X}")
@@ -327,12 +350,12 @@ def _print_single_agent(bucket: str, scenario: dict[str, Any], api_resp: dict[st
 
     if evidence:
         print("\n  Evidence       :")
-        for e in evidence[:4]:
+        for e in evidence[:5]:
             print(f"    • {e}")
 
     if red_flags:
         print("  Red flags      :")
-        for rf in red_flags[:4]:
+        for rf in red_flags[:5]:
             print(f"    {_R}•{_X} {rf}")
 
     if summary:
@@ -342,25 +365,45 @@ def _print_single_agent(bucket: str, scenario: dict[str, Any], api_resp: dict[st
             print(f"                   {extra}")
 
 
-def print_agent_section(
-    routing_results: list[tuple[str, dict[str, Any], dict[str, Any]]],
-) -> None:
-    agent_results = [(b, s, r) for b, s, r in routing_results if b in AGENT_BUCKETS and "_error" not in r]
-    if not agent_results:
-        print(f"  {_warn('No agent results — all agent buckets errored')}")
-        return
-    for bucket, scenario, api_resp in agent_results:
-        _print_single_agent(bucket, scenario, api_resp)
+# ---------------------------------------------------------------------------
+# Mandatory tools check
+# ---------------------------------------------------------------------------
+
+
+def print_mandatory_tools_section(
+    results: list[tuple[str, dict[str, Any], dict[str, Any]]],
+) -> tuple[int, int]:
+    print(f"\n{_B}[MANDATORY TOOLS CHECK]{_X}")
+    print(f"  Required for every critical transaction: {', '.join(sorted(MANDATORY_TOOLS))}")
+    passed = 0
+    total = 0
+    for bucket, _scenario, api_resp in results:
+        total += 1
+        if "_error" in api_resp:
+            print(f"  {_fail(f'{bucket:<18} API error — cannot check tools')}")
+            continue
+
+        inv = api_resp.get("investigation")
+        tools_called = set((inv or {}).get("tools_called") or [])
+        missing = MANDATORY_TOOLS - tools_called
+        prob = api_resp.get("fraud_probability", 0.0)
+
+        if not missing:
+            passed += 1
+            print(f"  {_ok(f'{bucket:<18} score={prob:.3f}  all mandatory tools called')}")
+        else:
+            print(f"  {_fail(f'{bucket:<18} score={prob:.3f}  missing: {sorted(missing)}')}")
+    return passed, total
 
 
 # ---------------------------------------------------------------------------
-# Structured output reliability
+# Structured output validation
 # ---------------------------------------------------------------------------
 
 _VALID_HINTS = {"likely_legitimate", "suspicious", "inconclusive"}
 
 
-def _validate_investigation(inv: dict[str, Any] | None) -> tuple[bool, list[str]]:
+def _validate_critical_result(inv: dict[str, Any] | None, prob: float) -> tuple[bool, list[str]]:
     issues: list[str] = []
     if not inv:
         return False, ["investigation is None"]
@@ -371,35 +414,37 @@ def _validate_investigation(inv: dict[str, Any] | None) -> tuple[bool, list[str]
         issues.append(f"confidence={conf!r} not in [0, 1]")
     if not inv.get("evidence"):
         issues.append("evidence list is empty")
-    if not inv.get("tools_called"):
-        issues.append("tools_called is empty")
-    # Detect fallback: inconclusive with no tools = agent failed silently
-    if inv.get("decision_hint") == "inconclusive" and not inv.get("tools_called"):
-        issues.append("fallback INCONCLUSIVE (no tools called)")
+    tools = inv.get("tools_called") or []
+    if len(tools) < 3:
+        issues.append(f"only {len(tools)} tools called — critical tier expects 4+")
+    if inv.get("decision_hint") == "likely_legitimate" and prob >= 0.80:
+        issues.append(f"likely_legitimate verdict for score={prob:.3f} — suspicious expected")
+    if inv.get("decision_hint") == "inconclusive" and not tools:
+        issues.append("fallback SUSPICIOUS expected on error, got inconclusive with no tools")
     return len(issues) == 0, issues
 
 
-def print_reliability_section(
+def print_structured_output_section(
     results: list[tuple[str, dict[str, Any], dict[str, Any]]],
 ) -> tuple[int, int]:
-    print(f"\n{_B}[STRUCTURED OUTPUT RELIABILITY]{_X}")
+    print(f"\n{_B}[STRUCTURED OUTPUT VALIDATION]{_X}")
     passed = 0
     total = 0
     for idx, (bucket, _scenario, api_resp) in enumerate(results, 1):
         total += 1
         if "_error" in api_resp:
             err = api_resp["_error"][:60]
-            print(f"  {_fail(f'#{idx} {bucket:<20}  API error: {err}')}")
+            print(f"  {_fail(f'#{idx} {bucket:<18}  API error: {err}')}")
             continue
 
         inv = api_resp.get("investigation")
-        ok, issues = _validate_investigation(inv)
+        prob = api_resp.get("fraud_probability", 0.0)
+        ok, issues = _validate_critical_result(inv, prob)
         hint = (inv or {}).get("decision_hint", "?")
         conf = (inv or {}).get("confidence", 0.0)
         tools_n = len((inv or {}).get("tools_called") or [])
-        prob = api_resp.get("fraud_probability", 0.0)
 
-        label = f"#{idx} {bucket:<20}  hint={hint:<20} conf={conf:.2f}  tools={tools_n}  score={prob:.3f}"
+        label = f"#{idx} {bucket:<18}  hint={hint:<20} conf={conf:.2f}  tools={tools_n}  score={prob:.3f}"
         if ok:
             passed += 1
             print(f"  {_ok(label)}")
@@ -452,14 +497,16 @@ def run_langsmith_check(env: dict[str, str]) -> tuple[int, int]:
 
 
 def _header() -> None:
-    line = "═" * 51
+    line = "═" * 58
     print(f"\n{_B}{line}")
-    print("  FraudLens Integration Probe")
+    print("  FraudLens — Critical Agent Health Check")
+    print("  Model: claude-haiku-4-5  |  Tools: 8  |  Tier: p >= 0.7")
+    print("  Extra tools: network_analysis, regulatory_rag, adverse_media")
     print(f"{line}{_X}")
 
 
 def _footer(passed: int, total: int, errors: int, elapsed: float) -> None:
-    line = "═" * 51
+    line = "═" * 58
     failed = total - passed - errors
     color = _G if passed == total else _R
     print(f"\n{_B}{line}")
@@ -474,11 +521,10 @@ def _footer(passed: int, total: int, errors: int, elapsed: float) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="FraudLens smoke test")
+    p = argparse.ArgumentParser(description="FraudLens Critical Agent smoke test")
     p.add_argument("--port", type=int, default=8001, help="API port (default 8001)")
     p.add_argument("--host", default="127.0.0.1", help="API host (default 127.0.0.1)")
     p.add_argument("--no-langsmith", action="store_true", help="Skip LangSmith check")
-    p.add_argument("--reliability-samples", type=int, default=0, help="Extra investigate txns for reliability check (default 0 for free tier)")
     p.add_argument("--seed", type=int, default=42, help="RNG seed for scenario selection")
     return p.parse_args()
 
@@ -493,7 +539,6 @@ async def _async_main() -> int:
     base_url = f"http://{args.host}:{args.port}"
     t_start = time.perf_counter()
 
-    # Load .env without importing fraudlens (standalone script)
     env: dict[str, str] = {}
     if ENV_PATH.exists():
         for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
@@ -512,98 +557,76 @@ async def _async_main() -> int:
     scenarios = load_scenarios()
     rng = random.Random(args.seed)
 
-    # ---- Infrastructure ----
+    # Check that critical buckets have scenarios
+    for b in CRITICAL_BUCKETS:
+        if not scenarios.get(b):
+            print(f"\n{_R}ERROR: No scenarios found for bucket '{b}'.{_X}")
+            print("       Run: uv run scripts/create_test_scenarios.py")
+            return 1
+
     infra_pass, infra_total = run_infra_checks(env)
     api_pass, api_total = run_health_check(base_url)
     total_passed = infra_pass + api_pass
     total_checks = infra_total + api_total
 
-    # ---- Build payloads ----
-    # 1 per bucket for routing
-    routing_pairs: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
-        (bucket, row := rng.choice(scenarios[bucket]), make_payload(row))
-        for bucket in BUCKET_ORDER
-    ]
+    # Pick 1 scenario per critical bucket
+    test_pairs: list[tuple[str, dict[str, Any], dict[str, Any]]] = [(bucket, row := rng.choice(scenarios[bucket]), make_payload(row)) for bucket in CRITICAL_BUCKETS]
 
-    # Extra investigate scenarios for reliability (pick from full pool)
-    invest_pool = (
-        scenarios["investigate_30_40"] + scenarios["investigate_40_50"]
-        + scenarios["investigate_50_60"] + scenarios["investigate_60_70"]
-    )
-    extra_scenarios = rng.sample(invest_pool, min(args.reliability_samples, len(invest_pool)))
-    reliability_pairs: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
-        (row["expected_bucket"], row, make_payload(row)) for row in extra_scenarios
-    ]
+    total_requests = len(test_pairs)
+    print(f"\n  {_dim(f'Dispatching {total_requests} critical-tier requests to {base_url}...')}")
+    print(f"  {_dim('Critical agent calls 4–6 tools per transaction. Timeout: 120s each.')}")
 
-    total_requests = len(routing_pairs) + len(reliability_pairs)
-
-    # ---- Sequential POST ----
-    print(f"\n  {_dim(f'Dispatching {total_requests} requests to {base_url} (sequentially)...')}")
-
-    routing_resps = []
-    reliability_resps = []
-
+    test_resps = []
     async with httpx.AsyncClient() as client:
-        for bucket, _scenario, p in routing_pairs:
+        for bucket, _scenario, p in test_pairs:
+            print(f"\n  {_dim(f'→ Sending {bucket}...')}", flush=True)
             resp = await _post_one(client, base_url, p)
-            routing_resps.append(resp)
-
+            test_resps.append(resp)
             if "_error" in resp:
-                err_msg = resp["_error"][:40]
-                print(f"    {_fail(f'{bucket:<20} API error: {err_msg}')}")
+                err = resp["_error"][:50]
+                print(f"    {_fail(f'{bucket:<18} API error: {err}')}")
             else:
                 action = resp.get("triage_action", "?")
                 prob = resp.get("fraud_probability", 0.0)
                 hint = (resp.get("investigation") or {}).get("decision_hint", "none")
-                print(f"    {_ok(f'{bucket:<20} score={prob:.3f} action={action} hint={hint}')}")
+                tools_n = len((resp.get("investigation") or {}).get("tools_called") or [])
+                print(f"    {_ok(f'{bucket:<18} score={prob:.3f} action={action} hint={hint} tools_used={tools_n}')}")
 
-        for i, (bucket, _scenario, p) in enumerate(reliability_pairs):
-            resp = await _post_one(client, base_url, p)
-            reliability_resps.append(resp)
+    results = [(b, s, r) for (b, s, _), r in zip(test_pairs, test_resps, strict=True)]
 
-            if "_error" in resp:
-                err_msg = resp["_error"][:40]
-                print(f"    {_fail(f'[Reliability #{i+1}] {bucket:<15} API error: {err_msg}')}")
-            else:
-                action = resp.get("triage_action", "?")
-                prob = resp.get("fraud_probability", 0.0)
-                hint = (resp.get("investigation") or {}).get("decision_hint", "none")
-                print(f"    {_ok(f'[Reliability #{i+1}] {bucket:<15} score={prob:.3f} action={action} hint={hint}')}")
-
-    routing_results = [(b, s, r) for (b, s, _), r in zip(routing_pairs, routing_resps, strict=True)]
-    reliability_results = [(b, s, r) for (b, s, _), r in zip(reliability_pairs, reliability_resps, strict=True)]
-
-    # ---- Triage routing ----
-    r_pass, r_total = print_routing_section(routing_results)
+    # Triage routing
+    r_pass, r_total = print_routing_section(results)
     total_passed += r_pass
     total_checks += r_total
 
-    # ---- Agent investigation (display only, no separate pass/fail) ----
-    print(f"\n{_B}[AGENT INVESTIGATION]{_X}")
-    print_agent_section(routing_results)
+    # Detailed agent output
+    print(f"\n{_B}[CRITICAL AGENT DETAIL]{_X}")
+    for bucket, scenario, api_resp in results:
+        if "_error" not in api_resp:
+            _print_single_critical(bucket, scenario, api_resp)
 
-    # ---- Structured output reliability ----
-    # Include the investigate results from routing + extra reliability samples
-    routing_invest = [(b, s, r) for b, s, r in routing_results if b in INVESTIGATE_BUCKETS]
-    all_reliability = routing_invest + reliability_results
-    rel_pass, rel_total = print_reliability_section(all_reliability)
-    total_passed += rel_pass
-    total_checks += rel_total
+    # Mandatory tools check
+    mt_pass, mt_total = print_mandatory_tools_section(results)
+    total_passed += mt_pass
+    total_checks += mt_total
 
-    # ---- LangSmith ----
+    # Structured output validation
+    so_pass, so_total = print_structured_output_section(results)
+    total_passed += so_pass
+    total_checks += so_total
+
     if not args.no_langsmith:
         ls_pass, ls_total = run_langsmith_check(env)
         total_passed += ls_pass
         total_checks += ls_total
 
-    errors = sum(1 for _, _, r in routing_results + reliability_results if "_error" in r)
+    errors = sum(1 for _, _, r in results if "_error" in r)
     elapsed = time.perf_counter() - t_start
     _footer(total_passed, total_checks, errors, elapsed)
     return 0 if total_passed == total_checks else 1
 
 
 def main() -> None:
-    # Ensure UTF-8 output on Windows terminals.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     sys.exit(asyncio.run(_async_main()))
