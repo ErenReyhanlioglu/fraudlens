@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     mlflow_host: str = Field(default="localhost", alias="MLFLOW_HOST")
     mlflow_port: int = Field(default=5000, alias="MLFLOW_PORT")
 
+    # OpenAI (embeddings only)
+    openai_api_key: SecretStr = Field(default=SecretStr(""), alias="OPENAI_API_KEY")
+
     # Anthropic
     anthropic_api_key: SecretStr = Field(default=SecretStr(""), alias="ANTHROPIC_API_KEY")
     anthropic_model_haiku: str = Field(default="claude-haiku-4-5-20251001", alias="ANTHROPIC_MODEL_HAIKU")

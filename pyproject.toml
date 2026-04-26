@@ -31,6 +31,12 @@ dependencies = [
     "langchain-core>=0.3",
     "langchain-google-genai>=2.0",
     "langsmith>=0.1",
+    "pypdf>=4.0",
+    "langchain-text-splitters>=0.3",
+    "openai>=1.0",
+    "qdrant-client>=1.9",
+    "networkx>=3.3",
+    "tiktoken>=0.7",
 ]
 
 [dependency-groups]
