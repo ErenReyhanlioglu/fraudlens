@@ -3,8 +3,6 @@
 Accepts a typed FraudInvestigationState, routes to the appropriate agent
 (Investigation or Critical based on risk_tier), and returns the populated state
 with an InvestigationResult attached.
-
-Critical agent is stubbed — falls back to investigation agent.
 """
 
 from __future__ import annotations
@@ -16,9 +14,10 @@ import structlog
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
+from fraudlens.agents.critical import run_critical_agent
 from fraudlens.agents.investigation import run_investigation_agent
 from fraudlens.schemas.decision import TriageAction
-from fraudlens.schemas.investigation import DecisionHint, InvestigationResult
+from fraudlens.schemas.investigation import InvestigationResult
 
 logger = structlog.get_logger(__name__)
 
@@ -51,23 +50,13 @@ async def _node_investigate(state: FraudInvestigationState, config: RunnableConf
 
 
 async def _node_critical(state: FraudInvestigationState, config: RunnableConfig) -> FraudInvestigationState:  # noqa: ARG001
-    """Run the Critical Agent (claude-haiku-4-5, 8 tools + RAG)
-
-    Currently delegates to the Investigation Agent so the pipeline stays functional.
-    """
-    logger.info("critical_agent_stub", transaction_id=state["transaction_id"])
-    result = await run_investigation_agent(
+    """Run the Critical Agent (claude-haiku-4-5, 8 tools + RAG)."""
+    result = await run_critical_agent(
         transaction_id=state["transaction_id"],
         fraud_probability=state["fraud_probability"],
         shap_values=state["shap_values"],
         transaction_context=json.dumps(state["transaction_context"], default=str),
     )
-    # Override hint to SUSPICIOUS for high-risk transactions pending full Critical agent.
-    if result.decision_hint == DecisionHint.INCONCLUSIVE:
-        result = result.model_copy(update={
-            "decision_hint": DecisionHint.SUSPICIOUS,
-            "red_flags": list(result.red_flags) + ["high_risk_tier_auto_escalate"],
-        })
     return {**state, "investigation_result": result}
 
 
