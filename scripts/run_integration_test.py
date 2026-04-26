@@ -121,11 +121,7 @@ def main() -> None:
                 try:
                     result = post_transaction(client, args.base_url, payload)
                 except httpx.HTTPStatusError as exc:
-                    print(
-                        f"  [{bucket_name}] ERROR {exc.response.status_code} — "
-                        f"score={score_label}\n"
-                        f"    detail: {exc.response.text[:400]}"
-                    )
+                    print(f"  [{bucket_name}] ERROR {exc.response.status_code} — score={score_label}\n    detail: {exc.response.text[:400]}")
                     errors += 1
                     continue
                 except Exception as exc:  # noqa: BLE001
@@ -143,14 +139,10 @@ def main() -> None:
                 else:
                     failed += 1
 
-                print(
-                    f"  [{bucket_name}] {status} — "
-                    f"expected={expected_triage} actual={actual_triage} "
-                    f"prob={actual_prob:.4f} (parquet_score={score_label})"
-                )
+                print(f"  [{bucket_name}] {status} — expected={expected_triage} actual={actual_triage} prob={actual_prob:.4f} (parquet_score={score_label})")
 
     total = passed + failed + errors
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed}/{total} passed, {failed} failed, {errors} errors")
 
     if failed > 0 or errors > 0:

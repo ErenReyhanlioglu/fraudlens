@@ -30,10 +30,12 @@ def find_similar_patterns(transaction_id: str, k: int = 5) -> str:
     patterns = _PATTERNS[:match_count]
     risk_level = _RISK_LEVELS[match_count]
 
-    return json.dumps({
-        "transaction_id": transaction_id,
-        "match_count": match_count,
-        "top_match_score": top_match_score if match_count > 0 else None,
-        "patterns": patterns,
-        "risk_level": risk_level,
-    })
+    return json.dumps(
+        {
+            "transaction_id": transaction_id,
+            "match_count": match_count,
+            "top_match_score": top_match_score if match_count > 0 else None,
+            "patterns": patterns,
+            "risk_level": risk_level,
+        }
+    )

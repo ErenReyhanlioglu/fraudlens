@@ -166,21 +166,13 @@ class InferenceExtractor:
 
         low_var: list[str] = _read("drop_low_variance.json")
         v_feats_raw = _read("drop_v_features.json")
-        v_feats: list[str] = (
-            v_feats_raw.get("dropped_v_cols", [])
-            if isinstance(v_feats_raw, dict)
-            else v_feats_raw
-        )
+        v_feats: list[str] = v_feats_raw.get("dropped_v_cols", []) if isinstance(v_feats_raw, dict) else v_feats_raw
         self._drop_pre = list(low_var) + list(v_feats)
 
         corr: list[str] = _read("drop_corr.json")
         adv: list[str] = _read("drop_adversarial.json")
         psi_raw = _read("drop_psi.json")
-        psi: list[str] = (
-            psi_raw.get("psi_drift_columns", [])
-            if isinstance(psi_raw, dict)
-            else psi_raw
-        )
+        psi: list[str] = psi_raw.get("psi_drift_columns", []) if isinstance(psi_raw, dict) else psi_raw
         self._drop_post = list(corr) + list(adv) + list(psi)
 
         self._loaded = True
@@ -222,9 +214,7 @@ class InferenceExtractor:
         flag_cols: list[str] = self._missing_strategy.get("flag_columns", [])
         missing_flag_cols = {col: np.nan for col in flag_cols if col not in df.columns}
         if missing_flag_cols:
-            df = pd.concat(
-                [df, pd.DataFrame([missing_flag_cols], index=df.index)], axis=1
-            )
+            df = pd.concat([df, pd.DataFrame([missing_flag_cols], index=df.index)], axis=1)
 
         df = apply_missing_strategy(df, self._missing_strategy, verbose=False)
 
@@ -276,9 +266,7 @@ class InferenceExtractor:
         txn_dt = (ts - _REFERENCE_EPOCH).total_seconds()
 
         # --- ProductCD: rule-based map + metadata override ---
-        product_cd: str | None = meta.get("product_cd") or _PRODUCT_CD_MAP.get(
-            tx.transaction_type
-        )
+        product_cd: str | None = meta.get("product_cd") or _PRODUCT_CD_MAP.get(tx.transaction_type)
 
         # --- card1: stable hash of sender_account_id into IEEE-CIS range ---
         card1 = _hash_to_int(tx.sender_account_id, _CARD1_MAX)
@@ -291,13 +279,13 @@ class InferenceExtractor:
             "TransactionDT": txn_dt,
             "ProductCD": product_cd,
             "card1": card1,
-            "card6": meta.get("card6"),          # "debit" / "credit" if known
+            "card6": meta.get("card6"),  # "debit" / "credit" if known
             "addr1": addr1,
             "P_emaildomain": meta.get("p_emaildomain"),
             "R_emaildomain": meta.get("r_emaildomain"),
             "DeviceType": _DEVICE_TYPE_MAP.get(tx.channel),
             "DeviceInfo": tx.device_fingerprint,
-            "id_30": meta.get("id_30"),          # OS version, e.g. "Windows 10"
+            "id_30": meta.get("id_30"),  # OS version, e.g. "Windows 10"
             # D1 must exist as float NaN (not Python None) so the column dtype is
             "D1": np.nan,
         }
@@ -373,6 +361,7 @@ def enrich_with_context(raw_features: dict[str, Any]) -> dict[str, Any]:
         ip_address, device_fingerprint, sender_country, receiver_country,
         currency, channel, is_weekend, is_night, hour_of_day.
     """
+
     def _safe_int(val: Any, default: int = 0) -> int:
         try:
             if val is None:
@@ -397,6 +386,7 @@ def enrich_with_context(raw_features: dict[str, Any]) -> dict[str, Any]:
     if dt_val is not None:
         try:
             from datetime import timedelta
+
             ts = _REFERENCE_EPOCH + timedelta(seconds=float(dt_val))
             timestamp = ts.isoformat()
         except Exception:

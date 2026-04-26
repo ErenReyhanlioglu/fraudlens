@@ -43,8 +43,8 @@ def get_geolocation_context(ip_address: str, device_id: str = "") -> str:
     """
     x, y = _parse_ip_octets(ip_address)
 
-    impossible_travel = (x % 7 == 0)
-    vpn_detected = (x % 11 == 0)
+    impossible_travel = x % 7 == 0
+    vpn_detected = x % 11 == 0
     ip_country = _COUNTRIES[x % 5]
 
     risk_signals: list[str] = []
@@ -53,12 +53,14 @@ def get_geolocation_context(ip_address: str, device_id: str = "") -> str:
     if vpn_detected:
         risk_signals.append("vpn_or_proxy_detected")
 
-    return json.dumps({
-        "ip_address": ip_address,
-        "ip_country": ip_country,
-        "vpn_detected": vpn_detected,
-        "impossible_travel": impossible_travel,
-        "risk_signals": risk_signals,
-        "isp": _ISPS[x % len(_ISPS)],
-        "ip_reputation_score": round((x % 100) / 100, 2),
-    })
+    return json.dumps(
+        {
+            "ip_address": ip_address,
+            "ip_country": ip_country,
+            "vpn_detected": vpn_detected,
+            "impossible_travel": impossible_travel,
+            "risk_signals": risk_signals,
+            "isp": _ISPS[x % len(_ISPS)],
+            "ip_reputation_score": round((x % 100) / 100, 2),
+        }
+    )

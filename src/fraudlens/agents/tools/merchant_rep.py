@@ -43,12 +43,14 @@ def check_merchant_reputation(merchant_id: str) -> str:
     elif risk_score > 0.5:
         flags.append("excessive_chargebacks")
 
-    return json.dumps({
-        "merchant_id": merchant_id,
-        "risk_score": risk_score,
-        "chargeback_rate_pct": chargeback_rate,
-        "flags": flags,
-        "industry_category": _INDUSTRIES[m % 5],
-        "months_on_platform": 1 + (m % 84),
-        "dispute_count_90d": m % 20,
-    })
+    return json.dumps(
+        {
+            "merchant_id": merchant_id,
+            "risk_score": risk_score,
+            "chargeback_rate_pct": chargeback_rate,
+            "flags": flags,
+            "industry_category": _INDUSTRIES[m % 5],
+            "months_on_platform": 1 + (m % 84),
+            "dispute_count_90d": m % 20,
+        }
+    )

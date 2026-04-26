@@ -42,13 +42,12 @@ def make_explain_ml_score_tool(shap_values: dict[str, float]) -> BaseTool:
             JSON with top_features list (feature name + shap_contribution),
             sorted by absolute impact descending.
         """
-        return json.dumps({
-            "transaction_id": transaction_id,
-            "top_features": sorted_features[:10],
-            "interpretation": (
-                "Positive shap_contribution → increases fraud probability. "
-                "Negative → decreases it (pushes toward legitimate)."
-            ),
-        })
+        return json.dumps(
+            {
+                "transaction_id": transaction_id,
+                "top_features": sorted_features[:10],
+                "interpretation": ("Positive shap_contribution → increases fraud probability. Negative → decreases it (pushes toward legitimate)."),
+            }
+        )
 
     return explain_ml_score

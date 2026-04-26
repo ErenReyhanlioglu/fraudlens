@@ -118,11 +118,7 @@ class FraudScorer:
     def _explainer(self) -> shap.TreeExplainer:
         if self._model is None:
             raise ModelNotLoadedError("FraudScorer has not been loaded yet.")
-        booster = (
-            self._model.get_booster()
-            if isinstance(self._model, xgb.XGBClassifier)
-            else self._model
-        )
+        booster = self._model.get_booster() if isinstance(self._model, xgb.XGBClassifier) else self._model
         return shap.TreeExplainer(booster)
 
     def _compute_shap(self, features: pd.DataFrame) -> list[ShapFeature]:
@@ -152,9 +148,7 @@ class FraudScorer:
     # Async wrapper for use inside FastAPI
     # ------------------------------------------------------------------
 
-    async def score_async(
-        self, features: pd.DataFrame
-    ) -> tuple[float, list[ShapFeature]]:
+    async def score_async(self, features: pd.DataFrame) -> tuple[float, list[ShapFeature]]:
         """Run `score` in the default thread executor (CPU-bound work)."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.score, features)
@@ -194,9 +188,7 @@ class FraudScorer:
         shap_features = self._compute_shap(df)
         return prob, shap_features
 
-    async def score_raw_async(
-        self, features: dict
-    ) -> tuple[float, list[ShapFeature]]:
+    async def score_raw_async(self, features: dict) -> tuple[float, list[ShapFeature]]:
         """Run `score_raw` in the default thread executor."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.score_raw, features)

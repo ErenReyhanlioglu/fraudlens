@@ -88,13 +88,7 @@ async def submit_transaction(
     risk_tier, triage_action = _triage(prob)
 
     # Auto-approve immediately; agents below will override for non-trivial cases.
-    outcome = (
-        DecisionOutcome.APPROVE
-        if triage_action is TriageAction.APPROVE
-        else DecisionOutcome.ESCALATE
-        if triage_action is TriageAction.ESCALATE
-        else DecisionOutcome.MANUAL_REVIEW
-    )
+    outcome = DecisionOutcome.APPROVE if triage_action is TriageAction.APPROVE else DecisionOutcome.ESCALATE if triage_action is TriageAction.ESCALATE else DecisionOutcome.MANUAL_REVIEW
 
     shap_dict = {f.feature: f.contribution for f in shap_features}
     decision_id = uuid.uuid4()
@@ -116,9 +110,7 @@ async def submit_transaction(
     if triage_action in (TriageAction.INVESTIGATE, TriageAction.ESCALATE):
         agent_type = AgentType.INVESTIGATION if triage_action is TriageAction.INVESTIGATE else AgentType.CRITICAL
 
-        shap_signals = annotate_shap(
-            [{"feature": f.feature, "shap": f.contribution} for f in shap_features]
-        )
+        shap_signals = annotate_shap([{"feature": f.feature, "shap": f.contribution} for f in shap_features])
         if raw_mode and payload.raw_features:
             banking_context = enrich_with_context(payload.raw_features)
         else:

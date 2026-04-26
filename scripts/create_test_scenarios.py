@@ -37,14 +37,14 @@ _APPROVE_THRESHOLD = 0.3
 _ESCALATE_THRESHOLD = 0.7
 
 BUCKETS: list[tuple[str, float, float]] = [
-    ("approve_low",       0.00, 0.10),
-    ("approve_high",      0.10, 0.30),
+    ("approve_low", 0.00, 0.10),
+    ("approve_high", 0.10, 0.30),
     ("investigate_30_40", 0.30, 0.40),
     ("investigate_40_50", 0.40, 0.50),
     ("investigate_50_60", 0.50, 0.60),
     ("investigate_60_70", 0.60, 0.70),
-    ("critical_low",      0.70, 0.85),
-    ("critical_high",     0.85, 1.00),
+    ("critical_low", 0.70, 0.85),
+    ("critical_high", 0.85, 1.00),
 ]
 
 SAMPLES_PER_BUCKET = 50
@@ -146,18 +146,13 @@ def main() -> None:
 
         selected: list[int] = []
         if len(fraud_idx) >= half and len(legit_idx) >= half:
-            selected = list(rng.choice(fraud_idx, half, replace=False)) + list(
-                rng.choice(legit_idx, half, replace=False)
-            )
+            selected = list(rng.choice(fraud_idx, half, replace=False)) + list(rng.choice(legit_idx, half, replace=False))
         else:
             n = min(SAMPLES_PER_BUCKET, len(idx))
             selected = list(rng.choice(idx, n, replace=False))
 
         for i in selected:
-            raw: dict = {
-                k: (None if np.isnan(v) else float(v))
-                for k, v in aligned_features.iloc[i].items()
-            }
+            raw: dict = {k: (None if np.isnan(v) else float(v)) for k, v in aligned_features.iloc[i].items()}
             scenarios.append(
                 {
                     "expected_bucket": bucket_name,
@@ -168,11 +163,7 @@ def main() -> None:
                 }
             )
 
-        print(
-            f"  bucket '{bucket_name}': {len(selected)} samples "
-            f"(fraud={sum(labels[s]==1 for s in selected)}, "
-            f"legit={sum(labels[s]==0 for s in selected)})"
-        )
+        print(f"  bucket '{bucket_name}': {len(selected)} samples (fraud={sum(labels[s] == 1 for s in selected)}, legit={sum(labels[s] == 0 for s in selected)})")
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with OUT_PATH.open("w", encoding="utf-8") as fh:

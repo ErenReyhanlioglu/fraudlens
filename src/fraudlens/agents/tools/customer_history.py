@@ -47,15 +47,17 @@ def get_customer_history(customer_id: str, days: int = 30) -> str:
     else:
         countries = ["CN", "RU", "UA"]
 
-    return json.dumps({
-        "customer_id": customer_id,
-        "lookback_days": days,
-        "transaction_count": tx_count,
-        "average_transaction_amount_usd": float(avg_amount),
-        "max_single_transaction_usd": float(avg_amount * 3),
-        "prior_suspicious_flags": prior_flags,
-        "countries_transacted": countries,
-        "account_age_days": 180 + (c % 3000),
-        "last_password_change_days_ago": 30 + (c % 300),
-        "failed_login_attempts_30d": failed_logins,
-    })
+    return json.dumps(
+        {
+            "customer_id": customer_id,
+            "lookback_days": days,
+            "transaction_count": tx_count,
+            "average_transaction_amount_usd": float(avg_amount),
+            "max_single_transaction_usd": float(avg_amount * 3),
+            "prior_suspicious_flags": prior_flags,
+            "countries_transacted": countries,
+            "account_age_days": 180 + (c % 3000),
+            "last_password_change_days_ago": 30 + (c % 300),
+            "failed_login_attempts_30d": failed_logins,
+        }
+    )

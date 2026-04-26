@@ -28,6 +28,7 @@ class Channel(StrEnum):
 
 class ShapFeature(BaseModel):
     """Single SHAP contribution for a model feature."""
+
     model_config = ConfigDict(frozen=True)
     feature: str
     value: float
