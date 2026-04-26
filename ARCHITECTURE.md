@@ -44,7 +44,7 @@ Layer 3a — Investigation Agent
     reasoning_summary: str
 
 Layer 3b — Critical Agent
-  Model: gemini-2.5-pro
+  Model: claude-haiku-4.5
   Framework: LangGraph ReAct
   Volume: ~10% of all transactions
   Tools: Layer 3a tools (5) + deep_network_analysis + regulatory_policy_rag + adverse_media_search
@@ -52,7 +52,7 @@ Layer 3b — Critical Agent
   RAG: BDDK/FATF PDFs → Qdrant, hybrid BM25+dense retrieval, bge-reranker, citation mandatory
 
 Layer 4 — Decision Synthesizer
-  Model: gemini-2.5-pro
+  Model: claude-haiku-4.5
   Input: InvestigationResult + ML score
   Output: FraudDecision (Pydantic strict)
     decision: approve | decline | escalate
@@ -60,7 +60,7 @@ Layer 4 — Decision Synthesizer
   Status: Hafta 6
 
 Layer 5 — SAR Report Generator
-  Model: gemini-2.5-pro
+  Model: claude-haiku-4.5
   Triggered only on decision=escalate
   Template-based prompt, fixed sections:
     Customer Information, Transaction Details, Suspicious Indicators,
@@ -134,7 +134,7 @@ Deployment:     Hugging Face Spaces (Hafta 8)
 Hafta 1 ✓  Project skeleton, Docker stack, GitHub Actions CI
 Hafta 2 ✓  XGBoost baseline + Optuna tuning (PR-AUC 0.4834), SHAP analysis
 Hafta 3 ✓  FastAPI backend, Pydantic schemas, SQLAlchemy/Alembic, triage router, 18/18 integration tests
-Hafta 4 ✓  Investigation Agent (gemini-2.0-flash), 5 tools, LangGraph graph, LangSmith tracing
+Hafta 4 ✓  Investigation Agent (claude-haiku-4.5), 5 tools, LangGraph graph, LangSmith tracing
 Hafta 5    RAG pipeline, Qdrant indexing, Critical Agent (gemini-2.5-pro)
 Hafta 6    Decision Synthesizer, SAR Generator
 Hafta 7    Eval framework, Streamlit demo, Grafana
@@ -145,7 +145,7 @@ Hafta 8    Deployment (HF Spaces), README polish, blog post
 1. Triage Router is rule-based — routing is a business rule, not an AI decision
 2. XGBoost for tabular scoring — deterministic, auditable, 100x faster and cheaper than LLM
 3. SHAP on every prediction — explainability is not optional in AML context
-4. gemini-2.0-flash for investigation (~30% volume), gemini-2.5-pro for critical (~10%) — cost-conscious routing
+4. claude-haiku-4.5 for investigation (~30% volume), gemini-2.5-pro for critical (~10%) — cost-conscious routing
 5. Feature extractor maps banking API fields to IEEE-CIS features via pre-computed JSON rule files
 6. raw_mode=true on POST /transactions accepts IEEE-CIS features directly — used for testing and demo
 7. Pydantic strict + retry on all LLM outputs — hallucination defense
