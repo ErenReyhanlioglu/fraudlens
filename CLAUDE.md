@@ -2,10 +2,35 @@
 
 Multi-agent fraud/AML detection system. XGBoost scores transactions, LangGraph agents investigate suspicious ones, RAG grounds decisions in BDDK/FATF regulations.
 
-## Quick Start
+## Terminal
 
 docker compose up -d
-uvicorn src.fraudlens.api.main:app --reload --port 8001
+docker compose down
+uv run uvicorn src.fraudlens.api.main:app --reload --port 8001
+uv run python scripts/build_rag_index.py
+uv run python scripts/investigator_agent_healthcheck.py
+uv run python scripts/critical_agent_healthcheck.py
+
+# Past Investigation Agent decisions (default: last 10)
+uv run python scripts/investigator_agent_history.py
+uv run python scripts/investigator_agent_history.py --limit 5
+uv run python scripts/investigator_agent_history.py --hint suspicious
+uv run python scripts/investigator_agent_history.py --since 24h
+uv run python scripts/investigator_agent_history.py --since 7d --verbose
+
+# Past Critical Agent decisions (default: last 10)
+uv run python scripts/critical_agent_history.py
+uv run python scripts/critical_agent_history.py --limit 5
+uv run python scripts/critical_agent_history.py --hint suspicious
+uv run python scripts/critical_agent_history.py --since 24h
+uv run python scripts/critical_agent_history.py --verbose --limit 3
+
+http://localhost:8001/docs           # FastAPI Swagger UI (API endpoints)
+http://localhost:8001/health         # API health check
+http://localhost:5000                # MLflow tracking UI
+http://localhost:6333/dashboard      # Qdrant vector DB dashboard
+http://localhost:5432                # PostgreSQL (with DB client)
+http://localhost:6379                # Redis (with CLI)
 
 ## Architecture
 
@@ -71,4 +96,4 @@ src/fraudlens/
 - raw_mode=true on POST /transactions → score_raw(), direct IEEE-CIS dict to model
 - Tool docstrings critical — LLM reads them to decide when to call each tool
 - LangGraph state must be TypedDict
-- Mock tools (similar_patterns, regulatory_rag) → real impl in Hafta 5
+- Mock tools (similar_patterns, regulatory_rag) 

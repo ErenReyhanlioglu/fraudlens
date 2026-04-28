@@ -123,7 +123,7 @@ ORM:            SQLAlchemy 2.0 async + Alembic
 Databases:      PostgreSQL 16, Redis 7, Qdrant
 ML:             XGBoost 2.x, scikit-learn, SHAP
 Agents:         LangGraph, LangChain, langchain-google-genai
-LLMs:           gemini-2.0-flash (investigation), gemini-2.5-pro (critical/synthesis/SAR)
+LLMs:           claude-haiku-4.5 (investigation), claude-haiku-4.5 (critical/synthesis/SAR)
 Observability:  LangSmith, MLflow, structlog
 DevOps:         Docker Compose, GitHub Actions, uv, ruff, mypy
 Demo:           Streamlit (Hafta 7)
@@ -135,7 +135,7 @@ Hafta 1 ✓  Project skeleton, Docker stack, GitHub Actions CI
 Hafta 2 ✓  XGBoost baseline + Optuna tuning (PR-AUC 0.4834), SHAP analysis
 Hafta 3 ✓  FastAPI backend, Pydantic schemas, SQLAlchemy/Alembic, triage router, 18/18 integration tests
 Hafta 4 ✓  Investigation Agent (claude-haiku-4.5), 5 tools, LangGraph graph, LangSmith tracing
-Hafta 5    RAG pipeline, Qdrant indexing, Critical Agent (gemini-2.5-pro)
+Hafta 5 ✓  RAG pipeline, Qdrant indexing, Critical Agent (claude-haiku-4.5)
 Hafta 6    Decision Synthesizer, SAR Generator
 Hafta 7    Eval framework, Streamlit demo, Grafana
 Hafta 8    Deployment (HF Spaces), README polish, blog post
