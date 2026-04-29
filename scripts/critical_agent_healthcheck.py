@@ -46,7 +46,7 @@ BUCKET_TRIAGE = {
 }
 
 # Tools that MUST be called by the Critical Agent (compliance requirement).
-MANDATORY_TOOLS = {"get_customer_history", "adverse_media_search", "deep_network_analysis"}
+MANDATORY_TOOLS = {"get_customer_history", "adverse_media_search", "deep_network_analysis", "regulatory_policy_rag"}
 
 _TX_BASE: dict[str, Any] = {
     "timestamp": "2024-01-15T10:00:00Z",
