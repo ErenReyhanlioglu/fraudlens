@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -42,6 +42,10 @@ class Decision(Base):
     tool_trace: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
     regulatory_citations: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    # SAR report — only populated when outcome = ESCALATE; NULL otherwise.
+    sar_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
+
     processing_time_ms: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -52,4 +56,33 @@ class Decision(Base):
         DateTime(timezone=True),
         nullable=True,
         onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class HealthcheckRun(Base):
+    """One healthcheck script execution — summary of all section results.
+
+    Written by each *_healthcheck.py script at the end of every run so past
+    probe history is queryable from the database.
+    """
+
+    __tablename__ = "healthcheck_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    script_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    elapsed_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    total_checks: Mapped[int] = mapped_column(Integer, nullable=False)
+    passed_checks: Mapped[int] = mapped_column(Integer, nullable=False)
+    failed_checks: Mapped[int] = mapped_column(Integer, nullable=False)
+    error_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    all_passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    check_details: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    transaction_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
