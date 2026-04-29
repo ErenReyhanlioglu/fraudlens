@@ -73,7 +73,7 @@ def _build_human_message(
         f"Transaction context:\n{transaction_context}\n\n"
         f"Investigation evidence:\n"
         + "\n".join(f"- {e}" for e in investigation_result.evidence)
-        + f"\n\nRed flags:\n"
+        + "\n\nRed flags:\n"
         + "\n".join(f"- {rf}" for rf in investigation_result.red_flags)
         + f"\n\nAgent reasoning:\n{investigation_result.reasoning_summary}\n\n"
         f"Regulatory citations surfaced by RAG:\n"
