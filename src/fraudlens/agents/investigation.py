@@ -113,7 +113,8 @@ def _extract_tool_trace(messages: list[Any]) -> tuple[list[str], list[dict[str, 
                 )
         if hasattr(msg, "tool_call_id") and msg.tool_call_id in calls_by_id:
             idx = calls_by_id[msg.tool_call_id]
-            tool_trace[idx]["result"] = str(msg.content)[:600]
+            limit = 15000 if tool_trace[idx]["tool"] == "regulatory_policy_rag" else 3000
+            tool_trace[idx]["result"] = str(msg.content)[:limit]
 
     tools_called = [tc["tool"] for tc in tool_trace]
     return tools_called, tool_trace
@@ -155,15 +156,27 @@ async def run_investigation_agent(
         find_similar_patterns,
     ]
 
-    agent = create_agent(llm, tools, system_prompt=_SYSTEM_PROMPT)
+    agent = create_agent(llm, tools)
 
-    human_message = f"Transaction ID: {transaction_id}\nML Fraud Probability: {fraud_probability:.4f}\nTransaction details:\n{transaction_context}\n\nPlease investigate this transaction using all relevant tools and provide your verdict."
+    # Anthropic prompt caching — the system prompt is identical across runs, so
+    # caching it reduces latency and cost on every investigation call.
+    system_message = SystemMessage(
+        content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+    )
+    human_message = HumanMessage(
+        content=(
+            f"Transaction ID: {transaction_id}\n"
+            f"ML Fraud Probability: {fraud_probability:.4f}\n"
+            f"Transaction details:\n{transaction_context}\n\n"
+            "Please investigate this transaction using all relevant tools and provide your verdict."
+        )
+    )
 
     log = logger.bind(transaction_id=transaction_id, fraud_probability=fraud_probability)
     log.info("investigation_agent_start")
 
     try:
-        agent_output = await agent.ainvoke({"messages": [HumanMessage(content=human_message)]})
+        agent_output = await agent.ainvoke({"messages": [system_message, human_message]})
     except Exception:
         log.exception("investigation_agent_failed")
         return _fallback_result(transaction_id)

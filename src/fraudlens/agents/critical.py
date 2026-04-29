@@ -49,12 +49,12 @@ MANDATORY CHECKS (always run for critical-tier transactions):
 2. get_customer_history — always run; behavioral baseline is mandatory at this tier
 3. adverse_media_search — always run; sanctions/PEP check is a compliance requirement
 4. deep_network_analysis — always run; detect layering/smurfing in transaction graph
+5. regulatory_policy_rag — always run; critical tier requires a regulatory basis for every verdict
 
 CONDITIONAL CHECKS (run based on findings):
-5. check_merchant_reputation — if merchant_id present AND network_analysis or customer_history shows red flags
-6. get_geolocation_context — if ip_address present AND ml_score > 0.75 or network risk is high
-7. regulatory_policy_rag — if 2+ red flags found; cite relevant FATF/MASAK regulation
-8. find_similar_patterns — last resort if verdict is still inconclusive after 5+ tool calls
+6. check_merchant_reputation — if merchant_id present AND network_analysis or customer_history shows red flags
+7. get_geolocation_context — if ip_address present AND ml_score > 0.75 or network risk is high
+8. find_similar_patterns — last resort if verdict is still inconclusive after 6+ tool calls
 
 VERDICT RULES:
 - suspicious: ANY of: sanctions match, PEP flag, circular fund flow, ml_score > 0.80 with 2+ red flags
@@ -62,12 +62,19 @@ VERDICT RULES:
 - likely_legitimate: all mandatory checks clean AND ml_score 0.70–0.75 with no behavioral anomalies
 
 REGULATORY CITATION REQUIREMENT:
-If you call regulatory_policy_rag, you MUST include the citation (source + page) in your reasoning_summary
-and evidence fields.
+You MUST call regulatory_policy_rag and include the citation (source + page) in your reasoning_summary
+and evidence fields. Every critical-tier verdict requires a documented regulatory basis.
 
-EFFICIENCY: Critical tier requires thoroughness. Run 4–6 tools. Never stop at 2–3 for critical transactions.
+CONFIDENCE SCORE RULES (you must output a float 0.0–1.0):
+- suspicious with 3+ red flags confirmed by tools: 0.85–0.95
+- suspicious with 1–2 red flags: 0.65–0.85
+- inconclusive with conflicting signals: 0.40–0.60
+- likely_legitimate with all clean mandatory checks: 0.70–0.90
+Never output confidence=0.0 unless every tool call returned an error.
 
-Always end with a detailed 3–5 sentence summary explaining your reasoning and any regulatory basis."""
+EFFICIENCY: Critical tier requires thoroughness. Run 5–7 tools. Never stop at 2–3 for critical transactions.
+
+Always end with a detailed 3–5 sentence summary explaining your reasoning and regulatory basis."""
 
 _MAX_STRUCTURED_RETRIES = 2
 
@@ -92,7 +99,8 @@ def _extract_tool_trace(messages: list[Any]) -> tuple[list[str], list[dict[str, 
                 tool_trace.append({"tool": tc["name"], "args": tc.get("args", {}), "result": ""})
         if hasattr(msg, "tool_call_id") and msg.tool_call_id in calls_by_id:
             idx = calls_by_id[msg.tool_call_id]
-            tool_trace[idx]["result"] = str(msg.content)[:600]
+            limit = 15000 if tool_trace[idx]["tool"] == "regulatory_policy_rag" else 3000
+            tool_trace[idx]["result"] = str(msg.content)[:limit]
 
     tools_called = [tc["tool"] for tc in tool_trace]
     return tools_called, tool_trace
@@ -136,21 +144,27 @@ async def run_critical_agent(
         adverse_media_search,
     ]
 
-    agent = create_agent(llm, tools, system_prompt=_SYSTEM_PROMPT)
+    agent = create_agent(llm, tools)
 
-    human_message = (
-        f"Transaction ID: {transaction_id}\n"
-        f"ML Fraud Probability: {fraud_probability:.4f}\n"
-        f"Transaction details:\n{transaction_context}\n\n"
-        "CRITICAL RISK transaction. Conduct a full investigation using all mandatory tools "
-        "and provide your compliance verdict with regulatory citations where applicable."
+    # Anthropic prompt caching — the system prompt is identical across runs.
+    system_message = SystemMessage(
+        content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+    )
+    human_message = HumanMessage(
+        content=(
+            f"Transaction ID: {transaction_id}\n"
+            f"ML Fraud Probability: {fraud_probability:.4f}\n"
+            f"Transaction details:\n{transaction_context}\n\n"
+            "CRITICAL RISK transaction. Conduct a full investigation using all mandatory tools "
+            "and provide your compliance verdict with regulatory citations where applicable."
+        )
     )
 
     log = logger.bind(transaction_id=transaction_id, fraud_probability=fraud_probability)
     log.info("critical_agent_start")
 
     try:
-        agent_output = await agent.ainvoke({"messages": [HumanMessage(content=human_message)]})
+        agent_output = await agent.ainvoke({"messages": [system_message, human_message]})
     except Exception:
         log.exception("critical_agent_failed")
         return _fallback_result(transaction_id)
@@ -168,10 +182,23 @@ async def run_critical_agent(
 
     structured_llm = llm.with_structured_output(InvestigationResult)
     parse_prompt = (
-        "Extract a structured investigation result from the following critical fraud investigation summary.\n\n"
+        "Extract a structured investigation result from the following CRITICAL TIER "
+        "fraud investigation summary.\n\n"
         f"Investigation summary:\n{final_text}\n\n"
-        "Note: do NOT include tool_trace or tools_called in your output — "
-        "those fields will be set programmatically."
+        "Rules:\n"
+        "- decision_hint: one of 'suspicious', 'inconclusive', or 'likely_legitimate'\n"
+        "- confidence: float 0.0–1.0 reflecting verdict certainty. "
+        "Use 0.85–0.95 for suspicious with 3+ confirmed red flags, "
+        "0.65–0.85 for suspicious with 1–2 red flags, "
+        "0.40–0.60 for inconclusive, 0.70–0.90 for likely_legitimate. "
+        "NEVER return 0.0 unless all tools failed.\n"
+        "- evidence: list of specific facts from the investigation (tool outputs, scores, dates). "
+        "If regulatory_policy_rag was called, include the cited regulation as an evidence item.\n"
+        "- red_flags: list of short risk signal labels (e.g. 'circular_fund_flow', 'sanctions_match', "
+        "'sanctions_list_hit', 'pep_flag', 'structuring_pattern')\n"
+        "- reasoning_summary: 3–5 sentence narrative explaining the verdict, the evidence chain, "
+        "and any regulatory basis. If a regulation was cited, name it explicitly.\n"
+        "- do NOT include tool_trace or tools_called — those are set programmatically\n"
     )
 
     result: InvestigationResult | None = None
