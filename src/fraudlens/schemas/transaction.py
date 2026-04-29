@@ -119,3 +119,9 @@ class TransactionResponse(BaseModel):
 
     # Populated only for INVESTIGATE / ESCALATE triage actions.
     investigation: Any | None = None
+
+    # Synthesized final outcome — present whenever an agent ran.
+    fraud_decision: Any | None = None
+
+    # SAR report — only populated when fraud_decision.outcome == ESCALATE.
+    sar_report: Any | None = None

@@ -36,12 +36,17 @@ class DecisionOutcome(StrEnum):
 
 
 class Regulatorycitation(BaseModel):
-    """Single regulatory reference surfaced by RAG."""
+    """Single regulatory reference surfaced by RAG.
+
+    `article` and `page` are both optional to accommodate different source types:
+    PDF-backed RAG fills `page`, structured legal corpora can populate `article`.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     source: str
-    article: str
+    article: str | None = None
+    page: int | None = None
     excerpt: str
     relevance_score: Annotated[float, Field(ge=0.0, le=1.0)]
 
@@ -83,6 +88,30 @@ class DecisionRead(BaseModel):
     tools_called: list[str]
     tool_trace: list[dict]
     regulatory_citations: list[Regulatorycitation]
+    sar_report: dict | None = None
     processing_time_ms: float
     created_at: datetime
     updated_at: datetime | None
+
+
+class FraudDecision(BaseModel):
+    """Synthesized fraud decision produced by the Decision Synthesizer.
+
+    Combines the agent's `InvestigationResult` with the triage tier into a
+    final outcome. Created deterministically (no LLM call) so the mapping is
+    auditable and reproducible.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    transaction_id: str
+    outcome: DecisionOutcome
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+    ml_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    agent_used: AgentType
+    decision_hint: str
+    evidence: list[str] = Field(default_factory=list)
+    red_flags: list[str] = Field(default_factory=list)
+    regulatory_citations: list[Regulatorycitation] = Field(default_factory=list)
+    reasoning: str
+    tools_called: list[str] = Field(default_factory=list)
