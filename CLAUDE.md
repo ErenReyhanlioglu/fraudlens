@@ -8,22 +8,32 @@ docker compose up -d
 docker compose down
 uv run uvicorn src.fraudlens.api.main:app --reload --port 8001
 uv run python scripts/build_rag_index.py
-uv run python scripts/investigator_agent_healthcheck.py
-uv run python scripts/critical_agent_healthcheck.py
 
-# Past Investigation Agent decisions (default: last 10)
+# Investigation Agent decisions (default: last 10)
+uv run python scripts/investigator_agent_healthcheck.py
 uv run python scripts/investigator_agent_history.py
 uv run python scripts/investigator_agent_history.py --limit 5
 uv run python scripts/investigator_agent_history.py --hint suspicious
 uv run python scripts/investigator_agent_history.py --since 24h
 uv run python scripts/investigator_agent_history.py --since 7d --verbose
 
-# Past Critical Agent decisions (default: last 10)
+# Critical Agent decisions (default: last 10)
+uv run python scripts/critical_agent_healthcheck.py
 uv run python scripts/critical_agent_history.py
 uv run python scripts/critical_agent_history.py --limit 5
 uv run python scripts/critical_agent_history.py --hint suspicious
 uv run python scripts/critical_agent_history.py --since 24h
 uv run python scripts/critical_agent_history.py --verbose --limit 3
+
+# Sar Agent decisions (default: last 10)
+uv run scripts/sar_agent_healthcheck.py
+uv run scripts/sar_agent_healthcheck.py --no-langsmith
+uv run scripts/sar_agent_healthcheck.py --port 8001 --host 127.0.0.1
+uv run scripts/sar_agent_healthcheck.py --seed 123
+uv run scripts/sar_agent_history.py 
+uv run scripts/sar_agent_history.py --limit 5
+uv run scripts/sar_agent_history.py --since 24h
+uv run scripts/sar_agent_history.py --since 7d --verbose
 
 http://localhost:8001/docs           # FastAPI Swagger UI (API endpoints)
 http://localhost:8001/health         # API health check

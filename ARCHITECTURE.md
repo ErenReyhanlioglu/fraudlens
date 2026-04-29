@@ -106,7 +106,7 @@ Table: decisions
   processing_time_ms: int
   created_at: timestamp
 
-## RAG Architecture (Hafta 5)
+## RAG Architecture 
 
 Documents: BDDK AML rehberleri, FATF 40 Recommendations, MASAK SAR rehberi, EU AI Act
 Chunking: RecursiveCharacterTextSplitter, 512 tokens, 128 overlap
@@ -136,7 +136,7 @@ Hafta 2 ✓  XGBoost baseline + Optuna tuning (PR-AUC 0.4834), SHAP analysis
 Hafta 3 ✓  FastAPI backend, Pydantic schemas, SQLAlchemy/Alembic, triage router, 18/18 integration tests
 Hafta 4 ✓  Investigation Agent (claude-haiku-4.5), 5 tools, LangGraph graph, LangSmith tracing
 Hafta 5 ✓  RAG pipeline, Qdrant indexing, Critical Agent (claude-haiku-4.5)
-Hafta 6    Decision Synthesizer, SAR Generator
+Hafta 6 ✓  Decision Synthesizer, SAR Generator
 Hafta 7    Eval framework, Streamlit demo, Grafana
 Hafta 8    Deployment (HF Spaces), README polish, blog post
 
