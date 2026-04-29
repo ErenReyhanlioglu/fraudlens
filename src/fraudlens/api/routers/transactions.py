@@ -24,7 +24,6 @@ from fraudlens.schemas.decision import (
     RiskTier,
     TriageAction,
 )
-from fraudlens.schemas.investigation import DecisionHint
 from fraudlens.schemas.transaction import TransactionRequest, TransactionResponse
 
 logger = structlog.get_logger(__name__)
@@ -46,13 +45,6 @@ def _triage(prob: float) -> tuple[RiskTier, TriageAction]:
     if prob < _ESCALATE_THRESHOLD:
         return RiskTier.MEDIUM, TriageAction.INVESTIGATE
     return RiskTier.HIGH, TriageAction.ESCALATE
-
-
-_HINT_TO_OUTCOME: dict[DecisionHint, DecisionOutcome] = {
-    DecisionHint.LIKELY_LEGITIMATE: DecisionOutcome.APPROVE,
-    DecisionHint.SUSPICIOUS: DecisionOutcome.ESCALATE,
-    DecisionHint.INCONCLUSIVE: DecisionOutcome.MANUAL_REVIEW,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +99,8 @@ async def submit_transaction(
     db.add(decision)
 
     investigation_result = None
+    fraud_decision = None
+    sar_report = None
     if triage_action in (TriageAction.INVESTIGATE, TriageAction.ESCALATE):
         agent_type = AgentType.INVESTIGATION if triage_action is TriageAction.INVESTIGATE else AgentType.CRITICAL
 
@@ -135,23 +129,37 @@ async def submit_transaction(
         }
 
         try:
-            investigation_result = await run_fraud_investigation(
+            state = await run_fraud_investigation(
                 transaction_id=str(payload.transaction_id),
                 fraud_probability=prob,
                 shap_values=shap_dict,
                 transaction_context=agent_context,
                 triage_action=triage_action.value,
             )
+            investigation_result = state.get("investigation_result")
+            fraud_decision = state.get("fraud_decision")
+            sar_report = state.get("sar_report")
+
             decision.agent_used = agent_type.value
             decision.model_name = settings.anthropic_model_haiku
-            decision.decision_hint = investigation_result.decision_hint.value
-            decision.confidence = investigation_result.confidence
-            decision.reasoning = investigation_result.reasoning_summary
-            decision.evidence = list(investigation_result.evidence)
-            decision.red_flags = list(investigation_result.red_flags)
-            decision.tools_called = list(investigation_result.tools_called)
-            decision.tool_trace = [dict(t) for t in investigation_result.tool_trace]
-            decision.outcome = _HINT_TO_OUTCOME[investigation_result.decision_hint].value
+
+            if investigation_result is not None:
+                decision.decision_hint = investigation_result.decision_hint.value
+                decision.confidence = investigation_result.confidence
+                decision.reasoning = investigation_result.reasoning_summary
+                decision.evidence = list(investigation_result.evidence)
+                decision.red_flags = list(investigation_result.red_flags)
+                decision.tools_called = list(investigation_result.tools_called)
+                decision.tool_trace = [dict(t) for t in investigation_result.tool_trace]
+
+            if fraud_decision is not None:
+                decision.outcome = fraud_decision.outcome.value
+                decision.regulatory_citations = [
+                    c.model_dump() for c in fraud_decision.regulatory_citations
+                ]
+
+            if sar_report is not None:
+                decision.sar_report = sar_report.model_dump(mode="json")
         except Exception:
             logger.exception("agent_dispatch_failed", transaction_id=str(payload.transaction_id))
 
@@ -168,6 +176,8 @@ async def submit_transaction(
         shap_top_features=shap_features,
         processing_time_ms=decision.processing_time_ms,
         investigation=investigation_result,
+        fraud_decision=fraud_decision,
+        sar_report=sar_report,
     )
 
 
