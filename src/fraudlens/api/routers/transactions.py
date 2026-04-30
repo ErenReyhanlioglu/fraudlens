@@ -101,6 +101,7 @@ async def submit_transaction(
     investigation_result = None
     fraud_decision = None
     sar_report = None
+    token_usage = None
     if triage_action in (TriageAction.INVESTIGATE, TriageAction.ESCALATE):
         agent_type = AgentType.INVESTIGATION if triage_action is TriageAction.INVESTIGATE else AgentType.CRITICAL
 
@@ -139,6 +140,7 @@ async def submit_transaction(
             investigation_result = state.get("investigation_result")
             fraud_decision = state.get("fraud_decision")
             sar_report = state.get("sar_report")
+            token_usage = state.get("token_usage")
 
             decision.agent_used = agent_type.value
             decision.model_name = settings.anthropic_model_haiku
@@ -178,6 +180,7 @@ async def submit_transaction(
         investigation=investigation_result,
         fraud_decision=fraud_decision,
         sar_report=sar_report,
+        token_usage=token_usage,
     )
 
 

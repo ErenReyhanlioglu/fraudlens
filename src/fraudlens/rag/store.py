@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 
 import structlog
@@ -55,9 +56,11 @@ def upsert_chunks(chunks: list[Chunk], vectors: list[list[float]], client: Qdran
 
     points: list[PointStruct] = []
     for chunk, vector in zip(chunks, vectors, strict=True):
+        key = f"{chunk['source']}:p{chunk['page']}:c{chunk['chunk_index']}"
+        point_id = str(uuid.UUID(hashlib.md5(key.encode()).hexdigest()))
         points.append(
             PointStruct(
-                id=str(uuid.uuid4()),
+                id=point_id,
                 vector=vector,
                 payload={
                     "source": chunk["source"],

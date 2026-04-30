@@ -26,6 +26,7 @@ from fraudlens.agents.tools.network_analysis import deep_network_analysis
 from fraudlens.agents.tools.regulatory_rag import regulatory_policy_rag
 from fraudlens.agents.tools.similar_patterns import find_similar_patterns
 from fraudlens.core.config import get_settings
+from fraudlens.core.llm_throttle import throttled_invoke
 from fraudlens.schemas.investigation import DecisionHint, InvestigationResult
 
 logger = structlog.get_logger(__name__)
@@ -44,12 +45,14 @@ YOUR GOAL: Conduct a thorough investigation to determine if this transaction sho
 for SAR filing, is SUSPICIOUS but does not warrant SAR, or is INCONCLUSIVE.
 At this risk tier, err on the side of caution — SUSPICIOUS is preferred over INCONCLUSIVE.
 
-MANDATORY CHECKS (always run for critical-tier transactions):
+MANDATORY CHECKS (always run for critical-tier transactions, in this order):
 1. explain_ml_score — if shap_signals is empty
-2. get_customer_history — always run; behavioral baseline is mandatory at this tier
-3. adverse_media_search — always run; sanctions/PEP check is a compliance requirement
-4. deep_network_analysis — always run; detect layering/smurfing in transaction graph
-5. regulatory_policy_rag — always run; critical tier requires a regulatory basis for every verdict
+2. get_customer_history — always; behavioral baseline is mandatory at this tier
+3. adverse_media_search — always; sanctions/PEP check is a compliance requirement
+4. deep_network_analysis — always; detect layering/smurfing in transaction graph
+5. regulatory_policy_rag — ALWAYS call this immediately after deep_network_analysis,
+   before forming your verdict. This is unconditionally required for every critical-tier
+   investigation regardless of findings. Do not skip it.
 
 CONDITIONAL CHECKS (run based on findings):
 6. check_merchant_reputation — if merchant_id present AND network_analysis or customer_history shows red flags
@@ -61,9 +64,10 @@ VERDICT RULES:
 - inconclusive: conflicting signals where some tools show clean results despite high ML score
 - likely_legitimate: all mandatory checks clean AND ml_score 0.70–0.75 with no behavioral anomalies
 
-REGULATORY CITATION REQUIREMENT:
-You MUST call regulatory_policy_rag and include the citation (source + page) in your reasoning_summary
-and evidence fields. Every critical-tier verdict requires a documented regulatory basis.
+REGULATORY CITATION REQUIREMENT — NON-NEGOTIABLE:
+You have already called regulatory_policy_rag (step 5 above). Include the citation
+(source + page) in your reasoning_summary and evidence fields.
+A critical-tier verdict without a documented regulatory basis is incomplete.
 
 CONFIDENCE SCORE RULES (you must output a float 0.0–1.0):
 - suspicious with 3+ red flags confirmed by tools: 0.85–0.95
@@ -77,6 +81,18 @@ EFFICIENCY: Critical tier requires thoroughness. Run 5–7 tools. Never stop at 
 Always end with a detailed 3–5 sentence summary explaining your reasoning and regulatory basis."""
 
 _MAX_STRUCTURED_RETRIES = 2
+
+
+def _extract_token_usage(messages: list[Any]) -> dict[str, int]:
+    """Sum input/output token counts from all AIMessage usage_metadata entries."""
+    input_tokens = 0
+    output_tokens = 0
+    for msg in messages:
+        if msg.__class__.__name__ == "AIMessage":
+            meta = getattr(msg, "usage_metadata", None) or {}
+            input_tokens += meta.get("input_tokens", 0) or 0
+            output_tokens += meta.get("output_tokens", 0) or 0
+    return {"input_tokens": input_tokens, "output_tokens": output_tokens}
 
 
 def _extract_tool_trace(messages: list[Any]) -> tuple[list[str], list[dict[str, Any]]]:
@@ -111,7 +127,7 @@ async def run_critical_agent(
     fraud_probability: float,
     shap_values: dict[str, float],
     transaction_context: str,
-) -> InvestigationResult:
+) -> tuple[InvestigationResult, dict[str, int]]:
     """Run the Critical Agent for a single high-risk transaction.
 
     Args:
@@ -164,13 +180,16 @@ async def run_critical_agent(
     log.info("critical_agent_start")
 
     try:
-        agent_output = await agent.ainvoke({"messages": [system_message, human_message]})
+        agent_output = await throttled_invoke(
+            lambda: agent.ainvoke({"messages": [system_message, human_message]}), label="critical_agent_main_invoke"
+        )
     except Exception:
         log.exception("critical_agent_failed")
-        return _fallback_result(transaction_id)
+        return _fallback_result(transaction_id), {"input_tokens": 0, "output_tokens": 0}
 
     messages = agent_output.get("messages", [])
     tools_called, tool_trace = _extract_tool_trace(messages)
+    token_usage = _extract_token_usage(messages)
 
     final_text = ""
     for msg in reversed(messages):
@@ -204,11 +223,14 @@ async def run_critical_agent(
     result: InvestigationResult | None = None
     for attempt in range(_MAX_STRUCTURED_RETRIES + 1):
         try:
-            raw = await structured_llm.ainvoke(
-                [
-                    SystemMessage(content="You extract structured data from fraud investigation narratives. Be precise."),
-                    HumanMessage(content=parse_prompt),
-                ]
+            raw = await throttled_invoke(
+                lambda: structured_llm.ainvoke(
+                    [
+                        SystemMessage(content="You extract structured data from fraud investigation narratives. Be precise."),
+                        HumanMessage(content=parse_prompt),
+                    ]
+                ),
+                label="critical_agent_parse_output",
             )
             result = raw if isinstance(raw, InvestigationResult) else InvestigationResult.model_validate(raw)
             break
@@ -220,13 +242,13 @@ async def run_critical_agent(
                     reasoning=final_text,
                     tools_called=tools_called,
                     tool_trace=tool_trace,
-                )
+                ), token_usage
             log.debug("structured_output_retry", attempt=attempt + 1)
 
     if result is None:
-        return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace)
+        return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace), token_usage
 
-    return result.model_copy(update={"tools_called": tools_called, "tool_trace": tool_trace})
+    return result.model_copy(update={"tools_called": tools_called, "tool_trace": tool_trace}), token_usage
 
 
 def _fallback_result(

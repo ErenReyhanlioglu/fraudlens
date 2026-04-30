@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from fraudlens.core.config import Settings
+from fraudlens.core.llm_throttle import throttled_invoke
 from fraudlens.schemas.decision import FraudDecision
 from fraudlens.schemas.investigation import InvestigationResult
 from fraudlens.schemas.sar import SARReport
@@ -174,7 +175,10 @@ async def generate_sar_report(
     structured_llm = llm.with_structured_output(SARReport)
 
     try:
-        raw = await structured_llm.ainvoke([system_message, human_message])
+        raw = await throttled_invoke(
+            lambda: structured_llm.ainvoke([system_message, human_message]),
+            label="sar_generator_invoke",
+        )
     except Exception as exc:
         log.warning("sar_llm_call_failed", error=str(exc))
         return _fallback_sar(fraud_decision, transaction_context, investigation_result, model_name)

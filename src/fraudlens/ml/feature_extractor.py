@@ -260,7 +260,8 @@ class InferenceExtractor:
         meta: dict[str, Any] = tx.metadata or {}
 
         # --- TransactionDT ---
-        ts = tx.timestamp
+        ts_raw = tx.timestamp
+        ts = datetime.fromisoformat(ts_raw) if isinstance(ts_raw, str) else ts_raw
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
         txn_dt = (ts - _REFERENCE_EPOCH).total_seconds()

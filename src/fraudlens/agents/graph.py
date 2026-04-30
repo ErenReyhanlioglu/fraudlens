@@ -24,6 +24,7 @@ from fraudlens.agents.investigation import run_investigation_agent
 from fraudlens.agents.sar_generator import generate_sar_report
 from fraudlens.agents.synthesizer import synthesize_decision
 from fraudlens.core.config import get_settings
+from fraudlens.rag.retriever import retrieve
 from fraudlens.schemas.decision import DecisionOutcome, FraudDecision, TriageAction
 from fraudlens.schemas.investigation import InvestigationResult
 from fraudlens.schemas.sar import SARReport
@@ -42,6 +43,7 @@ class FraudInvestigationState(TypedDict):
     investigation_result: NotRequired[InvestigationResult]
     fraud_decision: NotRequired[FraudDecision]
     sar_report: NotRequired[SARReport]
+    token_usage: NotRequired[dict[str, int]]
 
 
 # ---------------------------------------------------------------------------
@@ -51,24 +53,63 @@ class FraudInvestigationState(TypedDict):
 
 async def _node_investigate(state: FraudInvestigationState, config: RunnableConfig) -> FraudInvestigationState:  # noqa: ARG001
     """Run the Investigation Agent (claude-haiku-4-5, 5 tools)."""
-    result = await run_investigation_agent(
+    result, token_usage = await run_investigation_agent(
         transaction_id=state["transaction_id"],
         fraud_probability=state["fraud_probability"],
         shap_values=state["shap_values"],
         transaction_context=json.dumps(state["transaction_context"], default=str),
     )
-    return {**state, "investigation_result": result}
+    return {**state, "investigation_result": result, "token_usage": token_usage}
 
 
 async def _node_critical(state: FraudInvestigationState, config: RunnableConfig) -> FraudInvestigationState:  # noqa: ARG001
     """Run the Critical Agent (claude-haiku-4-5, 8 tools + RAG)."""
-    result = await run_critical_agent(
+    result, token_usage = await run_critical_agent(
         transaction_id=state["transaction_id"],
         fraud_probability=state["fraud_probability"],
         shap_values=state["shap_values"],
         transaction_context=json.dumps(state["transaction_context"], default=str),
     )
-    return {**state, "investigation_result": result}
+
+    # Guarantee regulatory citations for all critical-tier cases.
+    # If the agent skipped regulatory_policy_rag (despite mandatory instruction),
+    # inject a direct retrieval so the synthesizer always has a regulatory basis.
+    if "regulatory_policy_rag" not in result.tools_called:
+        logger.warning("critical_agent_skipped_rag", transaction_id=state["transaction_id"])
+        red_flags_summary = ", ".join(result.red_flags[:3]) if result.red_flags else "high-risk transaction"
+        query = f"AML regulatory requirements for {red_flags_summary}"
+        try:
+            chunks = await retrieve(query, top_k=3)
+        except Exception:
+            chunks = []
+        if chunks:
+            rag_result = json.dumps(
+                {
+                    "query": query,
+                    "excerpts": [
+                        {
+                            "text": c["text"],
+                            "citation": f"{c['source']}, p.{c['page']}",
+                            "source": c["source"],
+                            "page": c["page"],
+                            "relevance_score": round(c["score"], 4),
+                        }
+                        for c in chunks
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            result = result.model_copy(
+                update={
+                    "tools_called": [*result.tools_called, "regulatory_policy_rag"],
+                    "tool_trace": [
+                        *result.tool_trace,
+                        {"tool": "regulatory_policy_rag", "args": {"query": query}, "result": rag_result},
+                    ],
+                }
+            )
+
+    return {**state, "investigation_result": result, "token_usage": token_usage}
 
 
 async def _node_synthesize(state: FraudInvestigationState, config: RunnableConfig) -> FraudInvestigationState:  # noqa: ARG001

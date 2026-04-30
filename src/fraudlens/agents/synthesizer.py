@@ -56,7 +56,10 @@ def _map_outcome(hint: DecisionHint, triage_action: str, confidence: float) -> D
         )
 
     if hint is DecisionHint.SUSPICIOUS:
-        return DecisionOutcome.ESCALATE if is_escalate else DecisionOutcome.DECLINE
+        if is_escalate:
+            return DecisionOutcome.ESCALATE
+        # Require high confidence for automatic decline; borderline suspicious → human review.
+        return DecisionOutcome.DECLINE if confidence >= 0.80 else DecisionOutcome.MANUAL_REVIEW
 
     if hint is DecisionHint.INCONCLUSIVE:
         return DecisionOutcome.ESCALATE if is_escalate else DecisionOutcome.MANUAL_REVIEW

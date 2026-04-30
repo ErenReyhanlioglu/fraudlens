@@ -24,6 +24,7 @@ from fraudlens.agents.tools.explain_ml_score import make_explain_ml_score_tool
 from fraudlens.agents.tools.geolocation import get_geolocation_context
 from fraudlens.agents.tools.merchant_rep import check_merchant_reputation
 from fraudlens.agents.tools.similar_patterns import find_similar_patterns
+from fraudlens.core.llm_throttle import throttled_invoke
 from fraudlens.core.config import get_settings
 from fraudlens.schemas.investigation import DecisionHint, InvestigationResult
 
@@ -86,6 +87,18 @@ Always end with a concise 2–3 sentence summary explaining your reasoning."""
 _MAX_STRUCTURED_RETRIES = 2
 
 
+def _extract_token_usage(messages: list[Any]) -> dict[str, int]:
+    """Sum input/output token counts from all AIMessage usage_metadata entries."""
+    input_tokens = 0
+    output_tokens = 0
+    for msg in messages:
+        if msg.__class__.__name__ == "AIMessage":
+            meta = getattr(msg, "usage_metadata", None) or {}
+            input_tokens += meta.get("input_tokens", 0) or 0
+            output_tokens += meta.get("output_tokens", 0) or 0
+    return {"input_tokens": input_tokens, "output_tokens": output_tokens}
+
+
 def _extract_tool_trace(messages: list[Any]) -> tuple[list[str], list[dict[str, Any]]]:
     """Extract ordered tool calls and their results from the LangGraph message history.
 
@@ -125,7 +138,7 @@ async def run_investigation_agent(
     fraud_probability: float,
     shap_values: dict[str, float],
     transaction_context: str,
-) -> InvestigationResult:
+) -> tuple[InvestigationResult, dict[str, int]]:
     """Run the Investigation Agent for a single medium-risk transaction.
 
     Args:
@@ -176,13 +189,16 @@ async def run_investigation_agent(
     log.info("investigation_agent_start")
 
     try:
-        agent_output = await agent.ainvoke({"messages": [system_message, human_message]})
+        agent_output = await throttled_invoke(
+            lambda: agent.ainvoke({"messages": [system_message, human_message]}), label="investigation_agent_main_invoke"
+        )
     except Exception:
         log.exception("investigation_agent_failed")
-        return _fallback_result(transaction_id)
+        return _fallback_result(transaction_id), {"input_tokens": 0, "output_tokens": 0}
 
     messages = agent_output.get("messages", [])
     tools_called, tool_trace = _extract_tool_trace(messages)
+    token_usage = _extract_token_usage(messages)
 
     # Extract the agent's final narrative from the last AI message without tool calls.
     final_text = ""
@@ -205,25 +221,28 @@ async def run_investigation_agent(
     result: InvestigationResult | None = None
     for attempt in range(_MAX_STRUCTURED_RETRIES + 1):
         try:
-            raw = await structured_llm.ainvoke(
-                [
-                    SystemMessage(content="You extract structured data from fraud investigation narratives. Be precise."),
-                    HumanMessage(content=parse_prompt),
-                ]
+            raw = await throttled_invoke(
+                lambda: structured_llm.ainvoke(
+                    [
+                        SystemMessage(content="You extract structured data from fraud investigation narratives. Be precise."),
+                        HumanMessage(content=parse_prompt),
+                    ]
+                ),
+                label="investigation_agent_parse_output",
             )
             result = raw if isinstance(raw, InvestigationResult) else InvestigationResult.model_validate(raw)
             break
         except (ValidationError, Exception) as exc:
             if attempt == _MAX_STRUCTURED_RETRIES:
                 log.warning("structured_output_parse_failed", error=str(exc))
-                return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace)
+                return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace), token_usage
             log.debug("structured_output_retry", attempt=attempt + 1)
 
     if result is None:
-        return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace)
+        return _fallback_result(transaction_id, reasoning=final_text, tools_called=tools_called, tool_trace=tool_trace), token_usage
 
     # Override tools_called and tool_trace with accurate message-history data.
-    return result.model_copy(update={"tools_called": tools_called, "tool_trace": tool_trace})
+    return result.model_copy(update={"tools_called": tools_called, "tool_trace": tool_trace}), token_usage
 
 
 def _fallback_result(

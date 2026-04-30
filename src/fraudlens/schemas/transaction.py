@@ -125,3 +125,6 @@ class TransactionResponse(BaseModel):
 
     # SAR report — only populated when fraud_decision.outcome == ESCALATE.
     sar_report: Any | None = None
+
+    # Aggregated LLM token counts for the agent run (None for auto-approved transactions).
+    token_usage: dict[str, int] | None = None
