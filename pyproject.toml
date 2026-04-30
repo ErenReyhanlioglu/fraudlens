@@ -37,6 +37,8 @@ dependencies = [
     "qdrant-client>=1.9",
     "networkx>=3.3",
     "tiktoken>=0.7",
+    "langchain-anthropic>=0.3",
+    "redis[hiredis]>=5.0",
 ]
 
 [dependency-groups]
@@ -45,6 +47,9 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "mypy",
+]
+demo = [
+    "streamlit>=1.35",
 ]
 
 [build-system]
