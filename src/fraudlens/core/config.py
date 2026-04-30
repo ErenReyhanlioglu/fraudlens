@@ -60,6 +60,18 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="fraudlens", alias="LANGSMITH_PROJECT")
     langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")
 
+    # LangSmith base URL for trace links shown in the demo
+    langsmith_base_url: str = Field(default="https://smith.langchain.com", alias="LANGSMITH_BASE_URL")
+
+    # LLM pricing (USD per million tokens) — override via env if pricing changes
+    llm_pricing: dict[str, dict[str, float]] = Field(
+        default={
+            "haiku": {"input_per_m": 0.80, "output_per_m": 4.00},
+            "sonnet": {"input_per_m": 3.00, "output_per_m": 15.00},
+        },
+        alias="LLM_PRICING",
+    )
+
     @property
     def database_url(self) -> str:
         """Async SQLAlchemy DSN for the Postgres instance."""
