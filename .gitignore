@@ -42,4 +42,4 @@ logs/
 # Test artifacts
 .pytest_cache/
 .coverage
-htmlcov/
+htmlcov/"tests/eval/results/" 
