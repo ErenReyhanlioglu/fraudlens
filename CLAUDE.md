@@ -2,64 +2,12 @@
 
 Multi-agent fraud/AML detection system. XGBoost scores transactions, LangGraph agents investigate suspicious ones, RAG grounds decisions in BDDK/FATF regulations.
 
-## Terminal
-
-docker compose up -d
-docker compose down
-uv run uvicorn src.fraudlens.api.main:app --reload --port 8001
-uv run python scripts/build_rag_index.py
-
-# Investigation Agent decisions (default: last 10)
-uv run python scripts/investigator_agent_healthcheck.py
-uv run python scripts/investigator_agent_history.py
-uv run python scripts/investigator_agent_history.py --limit 5
-uv run python scripts/investigator_agent_history.py --hint suspicious
-uv run python scripts/investigator_agent_history.py --since 24h
-uv run python scripts/investigator_agent_history.py --since 7d --verbose
-
-# Critical Agent decisions (default: last 10)
-uv run python scripts/critical_agent_healthcheck.py
-uv run python scripts/critical_agent_history.py
-uv run python scripts/critical_agent_history.py --limit 5
-uv run python scripts/critical_agent_history.py --hint suspicious
-uv run python scripts/critical_agent_history.py --since 24h
-uv run python scripts/critical_agent_history.py --verbose --limit 3
-
-# Sar Agent decisions (default: last 10)
-uv run scripts/sar_agent_healthcheck.py
-uv run scripts/sar_agent_healthcheck.py --no-langsmith
-uv run scripts/sar_agent_healthcheck.py --port 8001 --host 127.0.0.1
-uv run scripts/sar_agent_healthcheck.py --seed 123
-uv run scripts/sar_agent_history.py 
-uv run scripts/sar_agent_history.py --limit 5
-uv run scripts/sar_agent_history.py --since 24h
-uv run scripts/sar_agent_history.py --since 7d --verbose
-
-http://localhost:8001/docs           # FastAPI Swagger UI (API endpoints)
-http://localhost:8001/health         # API health check
-http://localhost:5000                # MLflow tracking UI
-http://localhost:6333/dashboard      # Qdrant vector DB dashboard
-http://localhost:5432                # PostgreSQL (with DB client)
-http://localhost:6379                # Redis (with CLI)
-
-## Architecture
-
-POST /transactions → XGBoost scorer (<50ms) → Triage Router:
-  p < 0.3  → auto-approve
-  0.3-0.7  → Investigation Agent (claude-haiku-4-5, 5 tools, LangGraph)
-  p >= 0.7 → Critical Agent (claude-haiku-4-5, 8 tools + RAG, LangGraph)
-→ Decision Synthesizer (Pydantic structured output)
-→ SAR Generator (only on "escalate")
-
-## Current State (Hafta 3 complete)
-
-- XGBoost tuned model: data/processed/xgb_tuned_v1.joblib (79 features, PR-AUC 0.4834)
-- SHAP explainer integrated, top-10 contributors per prediction
-- FastAPI: POST /api/v1/transactions, GET /api/v1/decisions/{id}
-- raw_mode=true bypasses feature_extractor, accepts IEEE-CIS features directly
-- PostgreSQL decisions table live (Alembic migrated)
-- Integration tests: 18/18 pass across all triage buckets
-- LangSmith + MLflow configured, Docker stack healthy
+## Architecture Context
+- **Pipeline:** POST /transactions -> XGBoost (determines bucket) -> Triage Router -> Agent (Investigation/Critical via LangGraph) -> Synthesizer -> SAR Generator.
+- **Triage:** Rule-based routing based on ML probability (`p < 0.3` approve, `0.3-0.7` Investigation Agent, `p >= 0.7` Critical Agent).
+- **Agents:** Powered by `claude-haiku-4-5`. Tools are selected based on strict docstrings. RAG implementation requires mandatory citations.
+- **Data:** Imbalanced dataset handling via class weights, not SMOTE. Features extracted to IEEE-CIS format via JSON rules (`raw_mode=true` bypasses extraction).
+- **Explainability:** SHAP values passed to agents via tools for all predictions.
 
 ## Project Structure
 
@@ -73,25 +21,15 @@ src/fraudlens/
 ├── rag/      # Qdrant, chunker, embedder, retriever 
 └── schemas/  # Pydantic models: transaction, decision, investigation, sar
 
-## Key Decisions
 
-- Triage Router is rule-based, NOT AI
-- XGBoost for tabular scoring — deterministic, auditable, 100x faster than LLM
-- claude-haiku-4-5 for investigation (~30%) and critical (~10%)
-- SHAP on every prediction → passed as agent context via explain_ml_score tool
-- RAG: 512 tok chunks, 128 overlap, BM25+dense hybrid, bge-reranker, citation mandatory
-- IEEE-CIS ~3.5% fraud rate → class_weight balanced, NOT SMOTE
-- Feature extractor maps banking API fields → IEEE-CIS features via JSON rule files
-
-## Code Rules
-
-- src layout, type hints everywhere, no exceptions
-- async/await for FastAPI + SQLAlchemy + httpx
-- Pydantic v2 strict mode + retry on LLM output failure
-- structlog JSON, never print()
-- English in all code, docstrings, commits
-- Google-style docstrings on public classes/functions
-- Ruff enforced: built-in types (list/dict/tuple not typing.*), sorted imports, 100 char limit
+## Code Rules & Restrictions (STRICT)
+- **Language:** Code, docstrings, commits MUST be in English. (Turkish is allowed ONLY in our chat communication if requested).
+- **Format:** Use `ruff` standards. Max 100 chars, sorted imports, built-in types (e.g., `list`, not `typing.List`).
+- **Typing & Validation:** Strict type hints everywhere. Use Pydantic v2 strict mode.
+- **Async:** Use `async/await` for FastAPI, SQLAlchemy, and httpx.
+- **Logging:** Use `structlog` (JSON format). NEVER use `print()`.
+- **LLM Outputs:** When modifying code, return ONLY the git diff or the specific changed lines. DO NOT output the entire file unless explicitly asked. DO NOT generate inline comments explaining the code.
+- **Architecture:** Maintain strict separation of concerns (API -> Logic -> DB).
 
 ## Services & Keys
 
@@ -107,3 +45,11 @@ src/fraudlens/
 - Tool docstrings critical — LLM reads them to decide when to call each tool
 - LangGraph state must be TypedDict
 - Mock tools (similar_patterns, regulatory_rag) 
+
+# Output Constraints (Optimized Caveman Mode)
+
+1. Zero conversational filler. Do not use greetings, pleasantries, apologies, or ethical disclaimers.
+2. No boilerplate text. Do not explain what you are going to do before doing it.
+3. Code strictly speaks for itself. Provide direct code blocks without introductory or concluding paragraphs.
+4. If reasoning is mathematically or algorithmically required before writing code, use ultra-concise bullet points or pseudocode. 
+5. Maximize signal-to-noise ratio.
