@@ -62,7 +62,7 @@ packages = ["src/fraudlens"]
 [tool.ruff]
 line-length = 250
 target-version = "py311"
-exclude = ["notebooks/"] 
+exclude = ["notebooks/", "demo/", "scripts/", "tests/eval/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "ASYNC"]

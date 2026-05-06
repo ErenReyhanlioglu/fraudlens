@@ -46,3 +46,24 @@ jobs:
 
       - name: Pytest
         run: uv run pytest tests/
+
+  deploy-hf:
+    name: Deploy to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: lint-type-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "ci@fraudlens"
+          git config user.name "FraudLens CI"
+          git push https://MehmetErenn0:${HF_TOKEN}@huggingface.co/spaces/MehmetErenn0/fraudlens main --force

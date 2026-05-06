@@ -27,10 +27,7 @@ def estimate_cost_usd(input_tokens: int, output_tokens: int, model: str = "") ->
     cfg = settings.llm_pricing
 
     model_lower = model.lower()
-    if "sonnet" in model_lower:
-        prices = cfg.get("sonnet", cfg["haiku"])
-    else:
-        prices = cfg["haiku"]
+    prices = cfg.get("sonnet", cfg["haiku"]) if "sonnet" in model_lower else cfg["haiku"]
 
     return (
         input_tokens * prices["input_per_m"] + output_tokens * prices["output_per_m"]
@@ -86,7 +83,7 @@ async def get_daily_costs(days: int = 7) -> list[dict[str, Any]]:
             "date": d.strftime("%Y-%m-%d"),
             "cost_usd": float(v) if v else 0.0,
         }
-        for d, v in zip(dates, values)
+        for d, v in zip(dates, values, strict=False)
     ]
 
 

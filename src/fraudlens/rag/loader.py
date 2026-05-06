@@ -23,7 +23,7 @@ _HEADER_PATTERNS: list[re.Pattern[str]] = [
 def _clean_page_text(text: str) -> str:
     """Strip repetitive PDF header/footer lines that pollute RAG chunks."""
     lines = text.splitlines()
-    cleaned = [l for l in lines if not any(p.match(l.strip()) for p in _HEADER_PATTERNS)]
+    cleaned = [ln for ln in lines if not any(p.match(ln.strip()) for p in _HEADER_PATTERNS)]
     return "\n".join(cleaned).strip()
 
 
