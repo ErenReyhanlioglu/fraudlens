@@ -48,3 +48,4 @@ htmlcov/"tests/eval/results/"
 *.docx
 *.txt
 !requirements.txt
+tests/eval/results/
