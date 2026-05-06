@@ -12,7 +12,8 @@ slot for a new call that would receive the same 429 rejection.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import TypeVar
 
 import anthropic
@@ -69,3 +70,19 @@ async def throttled_invoke(fn: Callable[[], Awaitable[T]], label: str = "llm") -
                 await asyncio.sleep(wait)
 
     raise AssertionError("unreachable")  # satisfies type checker
+
+
+@asynccontextmanager
+async def throttled_stream(label: str = "llm") -> AsyncGenerator[None, None]:
+    """Acquire the global LLM semaphore for the duration of a streaming call.
+
+    Use this instead of throttled_invoke when calling astream_events, since the
+    semaphore must be held for the full streaming duration, not just until the
+    first token arrives.
+    """
+    sem = _get_semaphore()
+    logger.debug("throttled_stream_wait", label=label)
+    async with sem:
+        logger.debug("throttled_stream_start", label=label)
+        yield
+    logger.debug("throttled_stream_done", label=label)

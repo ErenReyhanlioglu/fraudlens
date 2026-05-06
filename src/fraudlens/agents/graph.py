@@ -35,6 +35,7 @@ logger = structlog.get_logger(__name__)
 class FraudInvestigationState(TypedDict):
     """Typed state threaded through the fraud investigation graph."""
 
+    job_id: str
     transaction_id: str
     fraud_probability: float
     shap_values: dict[str, float]
@@ -58,6 +59,7 @@ async def _node_investigate(state: FraudInvestigationState, config: RunnableConf
         fraud_probability=state["fraud_probability"],
         shap_values=state["shap_values"],
         transaction_context=json.dumps(state["transaction_context"], default=str),
+        job_id=state.get("job_id", ""),
     )
     return {**state, "investigation_result": result, "token_usage": token_usage}
 
@@ -69,6 +71,7 @@ async def _node_critical(state: FraudInvestigationState, config: RunnableConfig)
         fraud_probability=state["fraud_probability"],
         shap_values=state["shap_values"],
         transaction_context=json.dumps(state["transaction_context"], default=str),
+        job_id=state.get("job_id", ""),
     )
 
     # Guarantee regulatory citations for all critical-tier cases.
@@ -123,6 +126,7 @@ async def _node_synthesize(state: FraudInvestigationState, config: RunnableConfi
         fraud_probability=state["fraud_probability"],
         triage_action=state["triage_action"],
         transaction_id=state["transaction_id"],
+        job_id=state.get("job_id", ""),
     )
     return {**state, "fraud_decision": decision}
 
@@ -144,6 +148,7 @@ async def _node_sar(state: FraudInvestigationState, config: RunnableConfig) -> F
             transaction_context=state["transaction_context"],
             investigation_result=state["investigation_result"],
             settings=settings,
+            job_id=state.get("job_id", ""),
         )
     except Exception:
         logger.exception("sar_node_unexpected_failure", transaction_id=state["transaction_id"])
@@ -194,6 +199,7 @@ async def run_fraud_investigation(
     shap_values: dict[str, float],
     transaction_context: dict[str, Any],
     triage_action: str,
+    job_id: str = "",
 ) -> FraudInvestigationState:
     """Entry point for the fraud investigation graph.
 
@@ -203,6 +209,7 @@ async def run_fraud_investigation(
         shap_values: Feature name → SHAP contribution dict (top 10).
         transaction_context: Serialisable dict representation of TransactionRequest.
         triage_action: TriageAction value (INVESTIGATE or ESCALATE).
+        job_id: Background job identifier for Redis polling (reserved for future node use).
 
     Returns:
         FraudInvestigationState containing investigation_result, fraud_decision
@@ -210,6 +217,7 @@ async def run_fraud_investigation(
         artefact they need.
     """
     initial_state: FraudInvestigationState = {
+        "job_id": job_id,
         "transaction_id": transaction_id,
         "fraud_probability": fraud_probability,
         "shap_values": shap_values,
