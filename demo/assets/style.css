@@ -1,34 +1,613 @@
-/* Custom styles for FraudLens Streamlit Demo */
+/* ============================================================
+   FraudLens — Dark Theme
+   Design System:
+     Spacing: xs=4 sm=8 md=16 lg=24 xl=40
+     Surface-0: #0F1117  Surface-1: #1E2130  Surface-2: #161B27
+     Border: #2D3250  Accent: #6C63FF
+     Text: #E2E8F0 / #94A3B8 / #64748B
+   ============================================================ */
 
-.stMetric {
-    background-color: #FFFFFF; /* White background for cards */
-    border-radius: 10px; /* Rounded corners */
-    padding: 15px 20px; /* Inner spacing */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Softer shadow */
-    margin-bottom: 15px; /* Space between cards */
-    border: 1px solid #E5E7EB; /* Light border */
+/* ---- Base ---- */
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+.main {
+    background-color: #0F1117 !important;
+    color: #E2E8F0;
 }
 
-.stMetric > div:first-child { /* Metric Label */
-    font-size: 0.9rem;
-    color: #6B7280; /* Gray-500 */
+.main .block-container {
+    background-color: #0F1117 !important;
+    padding-top: 1.5rem;
+}
+
+/* ---- Sidebar ---- */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div,
+[data-testid="stSidebar"] > div > div {
+    background-color: #161B27 !important;
+    border-right: 1px solid #2D3250;
+}
+
+/* ---- Typography ---- */
+h1, h2, h3, h4, h5, h6 { color: #E2E8F0 !important; }
+p, li, .stMarkdown { color: #E2E8F0; }
+.stMarkdown a { color: #6C63FF; }
+[data-testid="stCaptionContainer"] { color: #64748B !important; }
+
+/* ---- Metric Cards ---- */
+[data-testid="stMetric"] {
+    background: #1E2130 !important;
+    border: 1px solid #2D3250 !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    transition: all 0.2s ease;
+}
+[data-testid="stMetric"]:hover {
+    border-color: #6C63FF !important;
+    box-shadow: 0 4px 16px rgba(108, 99, 255, 0.12) !important;
+    transform: translateY(-1px);
+}
+[data-testid="stMetricLabel"] > div {
+    color: #64748B !important;
+    font-size: 0.78rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     font-weight: 600;
+}
+[data-testid="stMetricValue"] {
+    color: #E2E8F0 !important;
+    font-size: 1.5rem !important;
+    font-weight: 700;
+}
+
+/* ---- Sidebar Logo Header ---- */
+.fl-sidebar-header {
+    background: linear-gradient(180deg, rgba(108,99,255,0.15) 0%, rgba(22,27,39,0) 100%);
+    padding: 20px 16px 16px;
+    margin: -1rem -1rem 1rem;
+    border-bottom: 1px solid #2D3250;
+}
+
+/* ---- fl-card ---- */
+.fl-card {
+    background: #1E2130;
+    border: 1px solid #2D3250;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+.fl-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(108,99,255,0.5), transparent);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.fl-card:hover {
+    transform: translateY(-2px);
+    border-color: #6C63FF;
+    box-shadow: 0 6px 24px rgba(108,99,255,0.15), 0 2px 8px rgba(0,0,0,0.3);
+}
+.fl-card:hover::before { opacity: 1; }
+
+/* ---- Loading Wrapper ---- */
+.fl-loading-wrapper {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-top: 60px;
+    width: 100%;
+}
+
+/* ---- Pipeline ---- */
+.fl-pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 40px 16px 24px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+.fl-pipeline-node {
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.fl-node-pending {
+    background: #1E2130;
+    border: 1px solid #2D3250;
+    color: #64748B;
+}
+.fl-node-active {
+    background: rgba(108,99,255,0.12);
+    border: 1px solid #6C63FF;
+    color: #6C63FF;
+    animation: node-pulse 1.6s ease-in-out infinite;
+}
+.fl-node-done {
+    background: rgba(16,185,129,0.1);
+    border: 1px solid #10B981;
+    color: #10B981;
+}
+.fl-node-skipped {
+    background: #1E2130;
+    border: 1px solid #1E2130;
+    color: #374151;
+    opacity: 0.4;
+}
+.fl-pipeline-arrow {
+    color: #374151;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    user-select: none;
+}
+@keyframes node-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(108,99,255,0.25); }
+    50%       { box-shadow: 0 0 20px rgba(108,99,255,0.55); }
+}
+
+/* ---- Thought Bubble ---- */
+.fl-thought-label {
+    font-size: 0.70rem;
+    color: #64748B;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+    width: 100%;
+}
+.fl-thought-bubble {
+    background: #1E2130;
+    border-left: 3px solid #6C63FF;
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    font-family: inherit;
+    font-size: 0.86rem;
+    line-height: 1.65;
+    max-height: 320px;
+    overflow-y: auto;
+    color: #CBD5E1;
+    animation: border-glow 2.2s ease-in-out infinite;
+    margin-bottom: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.fl-thought-bubble code {
+    background: rgba(108,99,255,0.12);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    color: #A5B4FC;
+}
+.fl-thought-bubble strong { color: #E2E8F0; }
+.fl-thought-bubble em { color: #94A3B8; }
+.fl-thought-bubble::-webkit-scrollbar { width: 4px; }
+.fl-thought-bubble::-webkit-scrollbar-track { background: #1E2130; }
+.fl-thought-bubble::-webkit-scrollbar-thumb {
+    background: rgba(108,99,255,0.4);
+    border-radius: 2px;
+}
+@keyframes border-glow {
+    0%, 100% { border-left-color: #6C63FF; }
+    50%       { border-left-color: #9C94FF; box-shadow: -4px 0 12px rgba(108,99,255,0.25); }
+}
+
+/* ---- Tool Badges ---- */
+.fl-tool-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 12px;
+}
+.fl-tool-badge {
+    padding: 5px 13px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: default;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+.fl-tool-badge:hover { filter: brightness(1.2); transform: translateY(-1px); }
+.fl-badge-done {
+    background: rgba(16,185,129,0.1);
+    border-color: #10B981;
+    color: #10B981;
+}
+.fl-badge-active {
+    background: rgba(108,99,255,0.12);
+    border-color: #6C63FF;
+    color: #6C63FF;
+    animation: badge-pulse 1s ease-in-out infinite;
+}
+.fl-badge-pending {
+    background: #1E2130;
+    border-color: #2D3250;
+    color: #64748B;
+}
+@keyframes badge-pulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(108,99,255,0.2); }
+    50%       { box-shadow: 0 0 16px rgba(108,99,255,0.6); }
+}
+
+/* ---- Outcome Badge ---- */
+.fl-outcome-badge {
+    display: inline-block;
+    padding: 14px 48px;
+    border-radius: 14px;
+    font-size: 1.65rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+    transition: all 0.2s ease;
+}
+.fl-outcome-approve    { background: #10B981; box-shadow: 0 0 32px rgba(16,185,129,0.35); }
+.fl-outcome-decline    { background: #EF4444; box-shadow: 0 0 32px rgba(239,68,68,0.35); }
+.fl-outcome-escalate   { background: #F97316; box-shadow: 0 0 32px rgba(249,115,22,0.35); }
+.fl-outcome-manual_review { background: #F59E0B; box-shadow: 0 0 32px rgba(245,158,11,0.35); }
+.fl-outcome-unknown    { background: #64748B; }
+
+/* ---- Verdict Hero (3 equal cards) ---- */
+.fl-verdict-card {
+    background: #1E2130;
+    border: 1px solid #2D3250;
+    border-radius: 12px;
+    padding: 16px 20px;
+    height: 100%;
+    transition: all 0.2s ease;
+}
+.fl-verdict-card:hover {
+    border-color: #6C63FF;
+    box-shadow: 0 4px 16px rgba(108,99,255,0.12);
+    transform: translateY(-1px);
+}
+.fl-verdict-label {
+    color: #64748B;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.fl-verdict-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #E2E8F0;
+}
+
+/* ---- Evidence Regulatory Citation ---- */
+.fl-ev-citation {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(108,99,255,0.05);
+    border-left: 2px solid #6C63FF;
+    border-radius: 0 6px 6px 0;
+    padding: 7px 12px;
+    margin: 4px 0;
+    font-size: 0.84rem;
+    color: #CBD5E1;
+    line-height: 1.5;
+}
+.fl-ev-citation-icon {
+    color: #6C63FF;
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* ---- Red Flags ---- */
+.fl-red-flag {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid #EF4444;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #EF4444;
+    margin: 3px 4px 3px 0;
+    transition: all 0.2s ease;
+}
+.fl-red-flag:hover { background: rgba(239,68,68,0.1); }
+
+/* ---- Tool Trace Cards ---- */
+.fl-tool-card {
+    background: #1E2130;
+    border: 1px solid #2D3250;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.80rem;
+    transition: all 0.2s ease;
+    height: 100%;
+    min-height: 90px;
+}
+.fl-tool-card:hover {
+    border-color: #6C63FF;
+    box-shadow: 0 2px 14px rgba(108,99,255,0.12);
+    transform: translateY(-1px);
+}
+.fl-tool-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.fl-tool-seq {
+    background: rgba(108,99,255,0.15);
+    color: #6C63FF;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.fl-tool-card-name {
+    color: #6C63FF;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.fl-tool-purpose {
+    color: #64748B;
+    font-size: 0.73rem;
+    margin-bottom: 6px;
+    font-weight: 400;
+}
+.fl-tool-card-result {
+    color: #94A3B8;
+    line-height: 1.45;
+    word-break: break-word;
+    font-size: 0.80rem;
+}
+
+/* ---- Citation Cards (collapsible via <details>) ---- */
+details.fl-citation-card {
+    background: rgba(108,99,255,0.05);
+    border: 1px solid rgba(108,99,255,0.2);
+    border-left: 3px solid #6C63FF;
+    border-radius: 0 8px 8px 0;
+    padding: 0;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+details.fl-citation-card:hover {
+    border-left-color: #9C94FF;
+    background: rgba(108,99,255,0.09);
+}
+details.fl-citation-card[open] {
+    border-left-color: #9C94FF;
+}
+details.fl-citation-card > summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+details.fl-citation-card > summary::-webkit-details-marker { display: none; }
+details.fl-citation-card > summary::marker { display: none; }
+details.fl-citation-card[open] > summary {
+    border-bottom: 1px solid rgba(108,99,255,0.15);
+    margin-bottom: 0;
+}
+.fl-citation-ref {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #A5B4FC;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.fl-citation-score {
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.fl-citation-excerpt {
+    font-size: 0.82rem;
+    color: #94A3B8;
+    line-height: 1.6;
+    padding: 10px 16px 12px;
+}
+
+/* ---- Pipeline Fork (Investigation | Critical as parallel branches) ---- */
+.fl-pipeline-fork {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+    margin: 0 4px;
+}
+.fl-pipeline-fork-or {
+    text-align: center;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #374151;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    padding: 0 4px;
     text-transform: uppercase;
 }
 
-.stMetric > div:nth-child(2) { /* Metric Value */
-    font-size: 1.8rem;
+/* ---- SAR Alert ---- */
+.fl-sar-alert {
+    border-left: 4px solid #F97316;
+    background: rgba(249,115,22,0.07);
+    padding: 12px 18px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 4px;
+}
+.fl-sar-title {
+    color: #F97316;
     font-weight: 700;
-    color: #1F2937; /* Gray-800 */
+    font-size: 1.05rem;
+    margin: 0;
 }
 
-.badge {
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: white;
+/* ---- Section Title ---- */
+.fl-section-title {
+    font-size: 0.70rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #64748B;
+    padding: 4px 0 14px;
+}
+
+/* ---- Subsection Label ---- */
+.fl-subsection-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: #4A5568;
+    margin-bottom: 4px;
+    padding: 0;
+}
+
+/* ---- Case Card (sidebar) ---- */
+.fl-case-card {
+    background: #1E2130;
+    border: 1px solid #2D3250;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 6px 0 10px;
+    font-size: 0.81rem;
+}
+.fl-tier-badge {
     display: inline-block;
-    margin-right: 5px;
-    margin-bottom: 5px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #fff;
+    margin-bottom: 6px;
+}
+.fl-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid #2D3250;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    color: #64748B;
+    margin: 2px 2px 2px 0;
+    transition: border-color 0.2s ease;
+}
+.fl-tag:hover { border-color: #6C63FF; color: #A5B4FC; }
+
+/* ---- Comparison result ---- */
+.fl-compare-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.81rem;
+    font-weight: 600;
+    padding: 6px 0 2px;
+}
+.fl-compare-correct { color: #10B981; }
+.fl-compare-wrong   { color: #EF4444; }
+.fl-compare-conf    { color: #64748B; font-weight: 400; font-size: 0.73rem; }
+
+/* ---- Expanders ---- */
+[data-testid="stExpander"] {
+    background: #1E2130 !important;
+    border: 1px solid #2D3250 !important;
+    border-radius: 8px !important;
+    transition: border-color 0.2s ease;
+}
+[data-testid="stExpander"]:hover { border-color: #6C63FF !important; }
+[data-testid="stExpander"] summary { color: #E2E8F0 !important; }
+
+/* ---- Divider ---- */
+hr { border-color: #2D3250 !important; margin: 24px 0; }
+
+/* ---- Buttons ---- */
+[data-testid="stButton"] > button {
+    background: #6C63FF !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+[data-testid="stButton"] > button:hover {
+    background: #7C74FF !important;
+    box-shadow: 0 4px 14px rgba(108,99,255,0.4) !important;
+    transform: translateY(-1px) !important;
+}
+[data-testid="stButton"] > button:disabled {
+    background: #2D3250 !important;
+    color: #64748B !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ---- Selectbox ---- */
+[data-testid="stSelectbox"] > div > div {
+    background: #1E2130 !important;
+    border-color: #2D3250 !important;
+    color: #E2E8F0 !important;
+    transition: border-color 0.2s ease;
+}
+[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: #6C63FF !important;
+}
+/* Disable hover tooltip on dropdown options */
+[data-baseweb="menu"] [role="option"] {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    cursor: pointer !important;
+}
+[data-baseweb="menu"] [role="option"] > div {
+    pointer-events: none !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+/* ---- Alerts ---- */
+[data-testid="stAlert"] { border-radius: 8px !important; }
+
+/* ---- Fade-in ---- */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.fl-fade-in { animation: fadeIn 0.3s ease forwards; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0F1117; }
+::-webkit-scrollbar-thumb { background: #2D3250; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108,99,255,0.5); }
+
+/* ---- Stage label ---- */
+.fl-stage-label {
+    font-size: 0.76rem;
+    color: #64748B;
+    padding: 2px 0 4px;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    width: 100%;
 }
