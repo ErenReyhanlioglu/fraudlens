@@ -71,7 +71,7 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./data:/app/data:ro
+      - ./data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
