@@ -42,7 +42,7 @@ def _date_key(date: datetime) -> str:
     return "cost:" + date.strftime("%Y-%m-%d")
 
 
-async def _get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
+async def _get_redis() -> aioredis.Redis:
     settings = get_settings()
     return aioredis.from_url(settings.redis_url, decode_responses=True)
 

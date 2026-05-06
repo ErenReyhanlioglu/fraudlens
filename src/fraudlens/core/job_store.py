@@ -19,14 +19,14 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-async def _get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
+async def _get_redis() -> aioredis.Redis:
     settings = get_settings()
     return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
 async def create_job(job_id: str) -> None:
     """Write initial queued state for a new job."""
-    state = {
+    state: dict[str, object] = {
         "job_id": job_id,
         "status": "queued",
         "stage_label": "Queued for processing",
@@ -74,7 +74,7 @@ async def get_job(job_id: str) -> dict | None:
         await r.aclose()
         if raw is None:
             return None
-        return json.loads(raw)
+        return dict(json.loads(raw))
     except Exception as exc:
         logger.warning("job_store_get_failed", job_id=job_id, error=str(exc))
         return None

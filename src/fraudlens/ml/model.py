@@ -56,11 +56,11 @@ class FraudScorer:
 
         if isinstance(raw, xgb.Booster):
             self._model = raw
-            self._feature_names = raw.feature_names or []
+            self._feature_names = list(raw.feature_names or [])
         elif isinstance(raw, xgb.XGBClassifier):
             self._model = raw
             booster: xgb.Booster = raw.get_booster()
-            self._feature_names = booster.feature_names or []
+            self._feature_names = list(booster.feature_names or [])
         else:
             raise ModelNotLoadedError(
                 f"Unexpected artifact type: {type(raw).__name__}",
@@ -126,7 +126,7 @@ class FraudScorer:
         try:
             shap_vals: np.ndarray = self._explainer.shap_values(features)
             # shap_values returns shape (1, n_features) for a single row.
-            row_shap = shap_vals[0] if shap_vals.ndim == 2 else shap_vals  # type: ignore[union-attr]
+            row_shap = shap_vals[0] if shap_vals.ndim == 2 else shap_vals
             feature_values = features.iloc[0].values
 
             top_idx = np.argsort(np.abs(row_shap))[::-1][:_TOP_N_SHAP]

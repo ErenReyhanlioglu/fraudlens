@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -18,7 +19,7 @@ class Base(DeclarativeBase):
     """Shared declarative base for all ORM models."""
 
 
-def _build_engine():  # type: ignore[return]
+def _build_engine() -> AsyncEngine:
     settings = get_settings()
     return create_async_engine(
         settings.database_url,

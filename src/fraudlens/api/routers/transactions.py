@@ -81,7 +81,7 @@ async def _run_pipeline_background(
         await update_job(job_id, status="scoring", stage_label="Running XGBoost fraud scorer")
 
         if raw_mode:
-            prob, shap_features = await scorer.score_raw_async(payload.raw_features)
+            prob, shap_features = await scorer.score_raw_async(payload.raw_features or {})
         else:
             feature_row = extractor.transform(payload)
             prob, shap_features = await scorer.score_async(feature_row)
@@ -115,10 +115,11 @@ async def _run_pipeline_background(
             shap_signals = annotate_shap(
                 [{"feature": f.feature, "shap": f.contribution} for f in shap_features]
             )
+            banking_context: dict[str, Any]
             if raw_mode and payload.raw_features:
                 banking_context = enrich_with_context(payload.raw_features)
             else:
-                banking_context: dict[str, Any] = {
+                banking_context = {
                     "amount": payload.amount,
                     "timestamp": payload.timestamp,
                     "transaction_type": payload.transaction_type,
