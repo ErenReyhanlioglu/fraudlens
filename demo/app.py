@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import os
+
 import httpx
 import plotly.graph_objects as go
 import streamlit as st
@@ -20,7 +22,7 @@ import streamlit as st
 # Constants
 # ---------------------------------------------------------------------------
 
-_API_BASE = "http://localhost:8001/api/v1"
+_API_BASE = os.environ.get("FRAUDLENS_API_BASE", "http://localhost:8001/api/v1")
 _GOLD_SET_PATH = Path(__file__).parent.parent / "tests" / "eval" / "gold_set.jsonl"
 _MAX_HISTORY = 8
 _POLL_INTERVAL = 0.4

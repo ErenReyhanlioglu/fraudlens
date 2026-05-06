@@ -12,14 +12,14 @@ Multi-agent fraud/AML detection system. XGBoost scores transactions, LangGraph a
 ## Project Structure
 
 src/fraudlens/
-├── api/      # FastAPI routes, middleware
-├── agents/   # LangGraph agents + tools 
-├── core/     # config.py (Pydantic Settings), logging, exceptions
-├── db/       # SQLAlchemy models, session, Alembic migrations
-├── llm/      # LLM provider routing 
-├── ml/       # XGBoost, SHAP, feature_extractor, model serving
-├── rag/      # Qdrant, chunker, embedder, retriever 
-└── schemas/  # Pydantic models: transaction, decision, investigation, sar
+├── api/           # FastAPI routes, middleware
+├── agents/        # LangGraph agents + tools
+├── core/          # config.py (Pydantic Settings), logging, exceptions
+├── db/            # SQLAlchemy models, session, Alembic migrations
+├── ml/            # XGBoost, SHAP, feature_extractor, model serving
+├── observability/ # structlog setup, LangSmith integration
+├── rag/           # Qdrant, chunker, embedder, retriever
+└── schemas/       # Pydantic models: transaction, decision, investigation, sar
 
 
 ## Code Rules & Restrictions (STRICT)
@@ -44,7 +44,7 @@ src/fraudlens/
 - raw_mode=true on POST /transactions → score_raw(), direct IEEE-CIS dict to model
 - Tool docstrings critical — LLM reads them to decide when to call each tool
 - LangGraph state must be TypedDict
-- Mock tools (similar_patterns, regulatory_rag) 
+- Mock tools: `find_similar_patterns` only; `regulatory_policy_rag` is real RAG (Qdrant)
 
 # Output Constraints (Optimized Caveman Mode)
 
