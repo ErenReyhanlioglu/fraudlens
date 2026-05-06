@@ -1,3 +1,14 @@
+---
+title: FraudLens
+emoji: 🔍
+colorFrom: purple
+colorTo: blue
+sdk: streamlit
+sdk_version: "1.44.0"
+app_file: demo/app_hf.py
+pinned: false
+---
+
 ## Project Structure
 
 ```text

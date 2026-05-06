@@ -43,3 +43,8 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/"tests/eval/results/" 
+
+# Docs
+*.docx
+*.txt
+!requirements.txt
