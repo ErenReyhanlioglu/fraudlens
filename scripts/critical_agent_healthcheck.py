@@ -183,10 +183,21 @@ async def _post_one(
             f"{base_url}/api/v1/transactions",
             params={"raw_mode": "true"},
             json=payload,
-            timeout=timeout,
+            timeout=30.0,
         )
         resp.raise_for_status()
-        return resp.json()
+        job_id = resp.json()["job_id"]
+        deadline = time.perf_counter() + timeout
+        while time.perf_counter() < deadline:
+            await asyncio.sleep(1.0)
+            poll = await client.get(f"{base_url}/api/v1/jobs/{job_id}", timeout=10.0)
+            poll.raise_for_status()
+            data = poll.json()
+            if data["status"] == "done":
+                return data.get("result") or {}
+            if data["status"] == "error":
+                return {"_error": data.get("error", "pipeline error")}
+        return {"_error": f"job {job_id} timed out after {timeout}s"}
     except Exception as exc:
         return {"_error": str(exc)}
 
