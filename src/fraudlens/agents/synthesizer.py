@@ -50,11 +50,7 @@ def _map_outcome(hint: DecisionHint, triage_action: str, confidence: float) -> D
     if hint is DecisionHint.LIKELY_LEGITIMATE:
         if not is_escalate:
             return DecisionOutcome.APPROVE
-        return (
-            DecisionOutcome.APPROVE
-            if confidence > _LEGITIMATE_ESCALATE_CONFIDENCE_OVERRIDE
-            else DecisionOutcome.MANUAL_REVIEW
-        )
+        return DecisionOutcome.APPROVE if confidence > _LEGITIMATE_ESCALATE_CONFIDENCE_OVERRIDE else DecisionOutcome.MANUAL_REVIEW
 
     if hint is DecisionHint.SUSPICIOUS:
         if is_escalate:
@@ -71,6 +67,7 @@ def _map_outcome(hint: DecisionHint, triage_action: str, confidence: float) -> D
 def _build_cited_set(cited_sources: list[str]) -> set[tuple[str, int]]:
     """Parse 'FILENAME.pdf, p.X' strings into (source_stem, page) pairs for matching."""
     import re
+
     result: set[tuple[str, int]] = set()
     for s in cited_sources:
         m = re.search(r"p\.?\s*(\d+)", s, re.IGNORECASE)
@@ -167,11 +164,7 @@ async def synthesize_decision(
         thought="Synthesizing agent findings with ML score to determine final outcome...",
     )
 
-    agent_used = (
-        AgentType.CRITICAL
-        if triage_action == TriageAction.ESCALATE.value
-        else AgentType.INVESTIGATION
-    )
+    agent_used = AgentType.CRITICAL if triage_action == TriageAction.ESCALATE.value else AgentType.INVESTIGATION
 
     outcome = _map_outcome(
         investigation_result.decision_hint,

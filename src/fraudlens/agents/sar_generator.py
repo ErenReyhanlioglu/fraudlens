@@ -82,14 +82,7 @@ def _build_human_message(
         + "\n\nRed flags:\n"
         + "\n".join(f"- {rf}" for rf in investigation_result.red_flags)
         + f"\n\nAgent reasoning:\n{investigation_result.reasoning_summary}\n\n"
-        f"Regulatory citations surfaced by RAG:\n"
-        + (
-            "\n".join(
-                f"- {c.source}, p.{c.page}: {c.excerpt[:160]}..."
-                for c in fraud_decision.regulatory_citations[:5]
-            )
-            or "- (none)"
-        )
+        f"Regulatory citations surfaced by RAG:\n" + ("\n".join(f"- {c.source}, p.{c.page}: {c.excerpt[:160]}..." for c in fraud_decision.regulatory_citations[:5]) or "- (none)")
     )
 
 
@@ -177,9 +170,7 @@ async def generate_sar_report(
             }
         ]
     )
-    human_message = HumanMessage(
-        content=_build_human_message(fraud_decision, transaction_context, investigation_result)
-    )
+    human_message = HumanMessage(content=_build_human_message(fraud_decision, transaction_context, investigation_result))
 
     # --- Phase 1: stream narrative ---
     narrative = ""
@@ -222,12 +213,7 @@ async def generate_sar_report(
     # --- Phase 2: structured parse ---
     await safe_update_job(job_id, thought=narrative.strip() + "\n\n[Extracting structured SAR fields...]")
     structured_llm = llm.with_structured_output(SARReport)
-    parse_prompt = (
-        "Extract a structured SAR report from the following compliance narrative.\n\n"
-        f"Narrative:\n{narrative}\n\n"
-        "Fill all fields from the narrative. "
-        "Do not invent data not present in the narrative."
-    )
+    parse_prompt = f"Extract a structured SAR report from the following compliance narrative.\n\nNarrative:\n{narrative}\n\nFill all fields from the narrative. Do not invent data not present in the narrative."
 
     result: SARReport | None = None
     for attempt in range(_MAX_STRUCTURED_RETRIES + 1):

@@ -165,9 +165,7 @@ async def run_critical_agent(
     agent = create_agent(llm, tools)
 
     # Anthropic prompt caching — the system prompt is identical across runs.
-    system_message = SystemMessage(
-        content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
-    )
+    system_message = SystemMessage(content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}])
     human_message = HumanMessage(
         content=(
             f"Transaction ID: {transaction_id}\n"

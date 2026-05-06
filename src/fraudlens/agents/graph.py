@@ -175,9 +175,7 @@ def _build_graph() -> Any:
     builder.add_node("critical", _node_critical)
     builder.add_node("synthesize", _node_synthesize)
     builder.add_node("sar", _node_sar)
-    builder.add_conditional_edges(
-        START, _route, {"investigate": "investigate", "critical": "critical"}
-    )
+    builder.add_conditional_edges(START, _route, {"investigate": "investigate", "critical": "critical"})
     builder.add_edge("investigate", "synthesize")
     builder.add_edge("critical", "synthesize")
     builder.add_edge("synthesize", "sar")

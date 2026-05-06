@@ -29,9 +29,7 @@ def estimate_cost_usd(input_tokens: int, output_tokens: int, model: str = "") ->
     model_lower = model.lower()
     prices = cfg.get("sonnet", cfg["haiku"]) if "sonnet" in model_lower else cfg["haiku"]
 
-    return (
-        input_tokens * prices["input_per_m"] + output_tokens * prices["output_per_m"]
-    ) / 1_000_000
+    return (input_tokens * prices["input_per_m"] + output_tokens * prices["output_per_m"]) / 1_000_000
 
 
 def _today_key() -> str:

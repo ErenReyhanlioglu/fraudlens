@@ -89,13 +89,7 @@ async def _run_pipeline_background(
 
         await update_job(job_id, status="routing", stage_label="Determining risk tier")
 
-        outcome = (
-            DecisionOutcome.APPROVE
-            if triage_action is TriageAction.APPROVE
-            else DecisionOutcome.ESCALATE
-            if triage_action is TriageAction.ESCALATE
-            else DecisionOutcome.MANUAL_REVIEW
-        )
+        outcome = DecisionOutcome.APPROVE if triage_action is TriageAction.APPROVE else DecisionOutcome.ESCALATE if triage_action is TriageAction.ESCALATE else DecisionOutcome.MANUAL_REVIEW
 
         shap_dict = {f.feature: f.contribution for f in shap_features}
         decision_id = uuid.uuid4()
@@ -106,15 +100,9 @@ async def _run_pipeline_background(
         token_usage = None
 
         if triage_action in (TriageAction.INVESTIGATE, TriageAction.ESCALATE):
-            agent_type = (
-                AgentType.INVESTIGATION
-                if triage_action is TriageAction.INVESTIGATE
-                else AgentType.CRITICAL
-            )
+            agent_type = AgentType.INVESTIGATION if triage_action is TriageAction.INVESTIGATE else AgentType.CRITICAL
 
-            shap_signals = annotate_shap(
-                [{"feature": f.feature, "shap": f.contribution} for f in shap_features]
-            )
+            shap_signals = annotate_shap([{"feature": f.feature, "shap": f.contribution} for f in shap_features])
             banking_context: dict[str, Any]
             if raw_mode and payload.raw_features:
                 banking_context = enrich_with_context(payload.raw_features)
@@ -223,9 +211,7 @@ async def _run_pipeline_background(
                 decision.tool_trace = [dict(t) for t in investigation_result.tool_trace]
             if fraud_decision is not None:
                 decision.outcome = fraud_decision.outcome.value
-                decision.regulatory_citations = [
-                    c.model_dump() for c in fraud_decision.regulatory_citations
-                ]
+                decision.regulatory_citations = [c.model_dump() for c in fraud_decision.regulatory_citations]
                 decision.model_name = settings.anthropic_model_haiku
             if sar_report is not None:
                 decision.sar_report = sar_report.model_dump(mode="json")

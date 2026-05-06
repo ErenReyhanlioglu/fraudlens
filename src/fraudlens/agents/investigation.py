@@ -175,16 +175,9 @@ async def run_investigation_agent(
 
     # Anthropic prompt caching — the system prompt is identical across runs, so
     # caching it reduces latency and cost on every investigation call.
-    system_message = SystemMessage(
-        content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
-    )
+    system_message = SystemMessage(content=[{"type": "text", "text": _SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}])
     human_message = HumanMessage(
-        content=(
-            f"Transaction ID: {transaction_id}\n"
-            f"ML Fraud Probability: {fraud_probability:.4f}\n"
-            f"Transaction details:\n{transaction_context}\n\n"
-            "Please investigate this transaction using all relevant tools and provide your verdict."
-        )
+        content=(f"Transaction ID: {transaction_id}\nML Fraud Probability: {fraud_probability:.4f}\nTransaction details:\n{transaction_context}\n\nPlease investigate this transaction using all relevant tools and provide your verdict.")
     )
 
     log = logger.bind(transaction_id=transaction_id, fraud_probability=fraud_probability)
