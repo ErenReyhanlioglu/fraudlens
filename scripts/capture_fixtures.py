@@ -101,14 +101,20 @@ def _write_py(fixtures: list[dict]) -> None:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tier", help="Only capture cases matching this tier (e.g. high, medium, low)")
+    args = parser.parse_args()
+
     if not _GOLD_SET.exists():
         print(f"ERROR: gold_set not found at {_GOLD_SET}", file=sys.stderr)
         sys.exit(1)
 
-    cases = [json.loads(line) for line in _GOLD_SET.read_text(encoding="utf-8").splitlines() if line.strip()]
-    print(f"Loaded {len(cases)} cases from gold_set.jsonl")
+    all_cases = [json.loads(line) for line in _GOLD_SET.read_text(encoding="utf-8").splitlines() if line.strip()]
+    cases = [c for c in all_cases if not args.tier or c.get("tier") == args.tier]
+    print(f"Loaded {len(all_cases)} cases — capturing {len(cases)}" + (f" (tier={args.tier})" if args.tier else ""))
 
-    # Quick health check — /health is at the app root, not under /api/v1
     base_url = _API_BASE.split("/api/")[0]
     try:
         r = httpx.get(f"{base_url}/health", timeout=5)
@@ -121,9 +127,20 @@ def main() -> None:
 
     print(f"Capturing {len(cases)} cases (concurrency={_CONCURRENCY})...")
     t0 = time.monotonic()
-    fixtures = asyncio.run(capture_all(cases))
+    new_fixtures = asyncio.run(capture_all(cases))
     elapsed = time.monotonic() - t0
-    print(f"\nCapture complete: {len(fixtures)} fixtures in {elapsed:.1f}s")
+    print(f"\nCapture complete: {len(new_fixtures)} fixtures in {elapsed:.1f}s")
+
+    # Merge with existing captured JSON when filtering by tier
+    if args.tier and _OUT_JSON.exists():
+        existing = json.loads(_OUT_JSON.read_text(encoding="utf-8"))
+        replaced_ids = {f["case"]["case_id"] for f in new_fixtures}
+        merged = [f for f in existing if f["case"]["case_id"] not in replaced_ids] + new_fixtures
+        merged.sort(key=lambda f: f["case"]["case_id"])
+        fixtures = merged
+        print(f"Merged with existing: {len(fixtures)} total fixtures")
+    else:
+        fixtures = new_fixtures
 
     _OUT_JSON.write_text(json.dumps(fixtures, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Raw JSON saved: {_OUT_JSON}")

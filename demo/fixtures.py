@@ -6158,8 +6158,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000041",
-      "decision_id": "262b5300-162f-46af-8c67-09ba31bb76b7",
-      "received_at": "2026-05-06T20:26:25.100310Z",
+      "decision_id": "b13abf82-6982-4471-8bdc-9f07f41fa031",
+      "received_at": "2026-05-06T20:37:49.554632Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -6215,29 +6215,35 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 160578.09043999988,
+      "processing_time_ms": 113940.21330099987,
       "investigation": {
         "decision_hint": "suspicious",
-        "confidence": 0.78,
+        "confidence": 0.88,
         "evidence": [
-          "ML score 0.7329 (Critical Tier) with top SHAP drivers: elevated address count (+2.11), high transaction count (+0.36), unusual gap since large transaction (+0.23)",
-          "Customer ACC-74 shows 44 transactions in 30 days (avg $124), 2 prior suspicious flags, transactions to CN/RU/UA, 4 failed logins in 30d, password unchanged for 104 days",
-          "Merchant MERCH-0074 risk score 0.74 (exceeds 0.7 threshold), crypto_exchange category, 14 disputes in 90d, documented high fraud rate history",
-          "Geolocation mismatch: IP country Brazil (BR) ≠ sender country US, datacenter ISP (AS60068-NL), IP reputation 0.74",
-          "Transaction ID: 00000000-0000-0000-0000-000000000041, Transaction Date: 2017-11-01",
-          "Network analysis clean (5 nodes, 0 edges, no hub nodes, no circular flows, no layering/smurfing)",
-          "Adverse media/sanctions check clean (no sanctions matches, no PEP flag, no adverse media hits)"
+          "ML Fraud Probability: 0.7329 (CRITICAL TIER) driven by elevated address count (+2.1077 SHAP), high transaction count (+0.3637 SHAP), and unusual gap since last large transaction (+0.2256 SHAP)",
+          "Customer ACC-74 has 2 prior suspicious flags in account history",
+          "Customer ACC-74 shows high transaction frequency: 44 transactions in 30 days with average amount $124 USD",
+          "Customer ACC-74 transacted with high-risk jurisdictions: China, Russia, Ukraine",
+          "Customer ACC-74 password unchanged for 104 days; 4 failed login attempts in 30 days",
+          "Merchant MERCH-0074 (Crypto Exchange) has risk score 0.74 (above 0.7 threshold) with high_fraud_rate_history flag",
+          "Merchant MERCH-0074 has elevated chargeback rate of 1.4% and 14 disputes in 90 days",
+          "Critical geographic mismatch: Transaction claims US→US origin but IP geolocation is Brazil with datacenter ISP (Netherlands)",
+          "Similar historical pattern match (score 0.71) indicates card-testing behavior",
+          "Transaction timestamp 2017-11-01 00:00:00 UTC is a night transaction",
+          "Network analysis shows zero transaction edges, limiting structural anomaly detection but consistent with first transaction in analysis window"
         ],
         "red_flags": [
-          "high_risk_merchant_engagement",
-          "elevated_address_count",
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_history",
+          "elevated_chargeback_rate",
           "prior_suspicious_flags",
-          "international_diversification_high_risk_jurisdictions",
+          "high_transaction_frequency",
+          "international_diversification_high_risk_countries",
+          "stale_security_controls",
           "failed_login_attempts",
-          "stale_password_credential_hygiene",
-          "geolocation_mismatch",
-          "account_compromise_indicators",
-          "crypto_exchange_transaction"
+          "geographic_mismatch_ip_vs_claimed_origin",
+          "card_testing_pattern",
+          "account_compromise_risk"
         ],
         "tools_called": [
           "get_customer_history",
@@ -6248,7 +6254,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "Transaction 00000000-0000-0000-0000-000000000041 is classified as SUSPICIOUS with 0.78 confidence based on convergent evidence across multiple risk vectors. The ML score of 0.7329 is driven by elevated address count (+2.11 SHAP), combined with critical merchant risk (MERCH-0074 crypto exchange with 0.74 risk score and 14 disputes in 90d), behavioral anomalies (44 transactions in 30d, 2 prior flags, transactions to CN/RU/UA, 4 failed logins, 104-day stale password), and geolocation inconsistency (Brazil IP vs. US sender). Per FATF Recommendation 21, crypto exchanges require special attention for money laundering and terrorist financing risk; per FATF Recommendation 13, suspicious transactions must be reported regardless of amount. The combination of 2+ confirmed red flags (merchant risk + behavioral anomalies + geolocation mismatch) meets the threshold for SAR filing and account takeover investigation.",
+        "reasoning_summary": "This transaction exhibits multiple critical red flags warranting SAR escalation. The ML model flagged a 0.7329 fraud probability driven by card-level behavioral anomalies (elevated address count, high transaction frequency). Customer ACC-74 demonstrates suspicious patterns: 2 prior suspicious flags, 44 transactions in 30 days to high-risk jurisdictions (China, Russia, Ukraine), stale security controls, and 4 failed login attempts suggesting account compromise. The merchant MERCH-0074 is a crypto exchange with a 0.74 risk score, documented fraud history, and 1.4% chargeback rate. Most critically, a geographic mismatch exists: the transaction claims US→US origin but the IP geolocation is Brazil with a Netherlands datacenter ISP, indicating account compromise, VPN/proxy usage, or location spoofing. Per FATF Recommendations 11 and 13, institutions must report transactions with unusual patterns and no apparent lawful purpose to the FIU; this transaction meets that threshold.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -6293,7 +6299,7 @@ _RAW = r'''
             "args": {
               "query": "FATF and MASAK requirements for suspicious transaction reporting involving high-risk merchants, elevated address counts, and international fund flows"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving high-risk merchants, elevated address counts, and international fund flows\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.658}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6342}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.6146}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.604}, {\"text\": \"FATF 40 Recommendations  \\n18 - © 2010 FATF/OECD \\n \\nINTERPRETATIVE NOTES \\nGeneral \\n1.  Reference in this document to “countries” should be taken to apply equally to “territories” or \\n“jurisdictions”. \\n2.  Recommendations 5-16 and 21 -22 state that financial institutions or designated non -financial \\nbusinesses and professions should take certain actions. These references require countries to \\ntake measures that will oblige financial institutions or designated non -financial businesses and \\nprofessions to  comply with each Recommendation. The basic obligations under \\nRecommendations 5, 10 and 13 should be set out in law or regulation, while more detailed \\nelements in those Recommendations, as well as obligations under other Recommendations,  \\ncould be required either by law or regulation or by other enforceable means issued by a \\ncompetent authority.    \\n3.  Where reference is made to a financial institution being satisfied as to a matter, that institution \\nmust be able to justify its assessment to competent authorities. \\n4.  To comply with Recommendations 12 and 16, countries do not need to issue laws or \\nregulations that relate exclusively to lawyers, notaries, accountants and the other designated \\nnon-financial businesses and professions so long as these businesses or professions are included \\nin laws or regulations covering the underlying activities.  \\n5. The Interpretative Notes that apply to financial institutions are also relevant to designated non -\\nfinancial businesses and professions, where applicable.  \\nRecommendations 5, 12 and 16 \\nThe designated thresholds for transactions (under Recommendations 5 and 12) are as follows: \\n Financial institutions (for occasional customers under Recommendation 5) - \\nUSD/EUR 15 000.  \\n Casinos, including internet casinos (under Recommendation 12) - USD/EUR 3 000  \\n For dealers in precious metals and dealers in precious stones when engaged in any cash \\ntransaction (under Recommendations 12 and 16) - USD/EUR 15 000.   \\nFinancial transactions above a designated threshold include situati ons where the transaction is carried \\nout in a single operation or in several operations that appear to be linked.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.18\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 18, \"relevance_score\": 0.6028}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving high-risk merchants, elevated address counts, and international fund flows\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6207}, {\"text\": \"Reporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions \\nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \\nthe activities referred to Recommendation 12(e).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.611}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5956}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5739}, {\"text\": \"© 2010 FATF/OECD - 5 \\nThe customer due diligence (CDD) measures to be taken are as follows: \\na) Identifying the customer and verifying that customer’s ident ity using reliable, independent \\nsource documents, data or information4. \\nb) Identifying the beneficial owner, and taking reasonable measures to verify the identity of the \\nbeneficial owner such that the financial institution is satisfied that it knows who the \\nbeneficial owner is. For legal persons and arrangements this should include financial \\ninstitutions taking reasonable measures to understand the ownership and control structure of \\nthe customer. \\nc) Obtaining information on the purpose and intended nature of the business relationship. \\nd) Conducting ongoing due diligence on the business relationship and scrutiny of transactions \\nundertaken throughout the course of that relationship to ensure that the transactions being \\nconducted are consistent with the institution’s knowledge of the customer, their business and \\nrisk profile, including, where necessary, the source of funds. \\nFinancial institutions should apply each of the CDD measures under (a) to (d) above, but may \\ndetermine the extent of such measures on a risk sensit ive basis depending on the type of \\ncustomer, business relationship or transaction. The measures that are taken should be consistent \\nwith any guidelines issued by competent authorities.  For higher risk categories, financial \\ninstitutions should perform enha nced due diligence.  In certain circumstances, where there are \\nlow risks, countries may decide that financial institutions can apply reduced or simplified \\nmeasures. \\nFinancial institutions should verify the identity of the customer and beneficial owner befo re or \\nduring the course of establishing a business relationship or conducting transactions for \\noccasional customers. Countries may permit financial institutions to complete the verification \\nas soon as reasonably practicable following the establishment of t he relationship, where the \\nmoney laundering risks are effectively managed and where this is essential not to interrupt the \\nnormal conduct of business.   \\nWhere the financial institution is unable to comply with paragraphs (a) to (c) above, it should \\nnot ope n the account, commence business relations or perform the transaction; or should \\nterminate the business relationship; and should consider making a suspicious transactions report \\nin relation to the customer.  \\nThese requirements should apply to all new customers, though financial institutions should also\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.5\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 5, \"relevance_score\": 0.5234}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -6305,54 +6311,60 @@ _RAW = r'''
           }
         ],
         "cited_sources": [
-          "fatf_40_recommendations_2012.pdf, p.9",
-          "fatf_40_recommendations_2012.pdf, p.22"
+          "fatf_40_recommendations_2012.pdf, p.7",
+          "fatf_40_recommendations_2012.pdf, p.8"
         ]
       },
       "fraud_decision": {
         "transaction_id": "00000000-0000-0000-0000-000000000041",
         "outcome": "escalate",
-        "confidence": 0.78,
+        "confidence": 0.88,
         "ml_score": 0.7329442501068115,
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "ML score 0.7329 (Critical Tier) with top SHAP drivers: elevated address count (+2.11), high transaction count (+0.36), unusual gap since large transaction (+0.23)",
-          "Customer ACC-74 shows 44 transactions in 30 days (avg $124), 2 prior suspicious flags, transactions to CN/RU/UA, 4 failed logins in 30d, password unchanged for 104 days",
-          "Merchant MERCH-0074 risk score 0.74 (exceeds 0.7 threshold), crypto_exchange category, 14 disputes in 90d, documented high fraud rate history",
-          "Geolocation mismatch: IP country Brazil (BR) ≠ sender country US, datacenter ISP (AS60068-NL), IP reputation 0.74",
-          "Transaction ID: 00000000-0000-0000-0000-000000000041, Transaction Date: 2017-11-01",
-          "Network analysis clean (5 nodes, 0 edges, no hub nodes, no circular flows, no layering/smurfing)",
-          "Adverse media/sanctions check clean (no sanctions matches, no PEP flag, no adverse media hits)"
+          "ML Fraud Probability: 0.7329 (CRITICAL TIER) driven by elevated address count (+2.1077 SHAP), high transaction count (+0.3637 SHAP), and unusual gap since last large transaction (+0.2256 SHAP)",
+          "Customer ACC-74 has 2 prior suspicious flags in account history",
+          "Customer ACC-74 shows high transaction frequency: 44 transactions in 30 days with average amount $124 USD",
+          "Customer ACC-74 transacted with high-risk jurisdictions: China, Russia, Ukraine",
+          "Customer ACC-74 password unchanged for 104 days; 4 failed login attempts in 30 days",
+          "Merchant MERCH-0074 (Crypto Exchange) has risk score 0.74 (above 0.7 threshold) with high_fraud_rate_history flag",
+          "Merchant MERCH-0074 has elevated chargeback rate of 1.4% and 14 disputes in 90 days",
+          "Critical geographic mismatch: Transaction claims US→US origin but IP geolocation is Brazil with datacenter ISP (Netherlands)",
+          "Similar historical pattern match (score 0.71) indicates card-testing behavior",
+          "Transaction timestamp 2017-11-01 00:00:00 UTC is a night transaction",
+          "Network analysis shows zero transaction edges, limiting structural anomaly detection but consistent with first transaction in analysis window"
         ],
         "red_flags": [
-          "high_risk_merchant_engagement",
-          "elevated_address_count",
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_history",
+          "elevated_chargeback_rate",
           "prior_suspicious_flags",
-          "international_diversification_high_risk_jurisdictions",
+          "high_transaction_frequency",
+          "international_diversification_high_risk_countries",
+          "stale_security_controls",
           "failed_login_attempts",
-          "stale_password_credential_hygiene",
-          "geolocation_mismatch",
-          "account_compromise_indicators",
-          "crypto_exchange_transaction"
+          "geographic_mismatch_ip_vs_claimed_origin",
+          "card_testing_pattern",
+          "account_compromise_risk"
         ],
         "regulatory_citations": [
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 22,
-            "excerpt": "FATF 40 Recommendations  \n22 - © 2010 FATF/OECD \nRecommendation 6 \nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \nprominent public functions in their own country. \nRecommendation 9 \nThis Recommendation does not apply to outsourcing or agency relationships. \nThis Recommendation also does not apply to relationships, accounts or transactions between financial \ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \nRecommendations 10 and 11 \nIn relation to insurance business, the word “transactions” should be  understood to refer to the \ninsurance product itself, the premium payment and the benefits. \nRecommendation 13 \n1. The reference to criminal activity in Recommendation 13 refers to: \na)  all criminal acts that would constitute a predicate offence for money la undering in the \njurisdiction; or \nb)  at a minimum to those offences that would constitute a predicate offence as required by \nRecommendation 1.  \nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \nincluding attempted tra nsactions, should be reported regardless of the amount of the \ntransaction. \n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \ntake into account that, in order to deter financial institutions from reporting a suspicious \ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \nmatters. \nRecommendation 14 (tipping off) \nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \ntipping off. \nRecommendation 15 \nThe type and extent of  measures to be taken for each of the requirements set out in the \nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \nfinancing and the size of the business. \nFor financial institutions, compliance management arrangements should include the appointment of a \ncompliance officer at the management level.",
-            "relevance_score": 0.6146
+            "page": 7,
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.6207
           },
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 9,
-            "excerpt": "FATF 40 Recommendations \n© 2010 FATF/OECD - 9 \nOther measures to deter money laundering and terrorist financing \n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \nrequirements. \n18. Countries should not approve the establishment or accept the continued operation of shell \nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \nrelationship with shell banks. Financial institutions should also guard against establishing \nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \nshell banks.  \n19. Countries should consider the feasibility and utility of a system where banks and other financial \ninstitutions and intermediaries would report all domestic and international currency transactions \nabove a fixed a mount, to a national central agency with a computerised data base, available to \ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \nsafeguards to ensure proper use of the information. \n20. Countries should consider applying the FATF Recommendations to businesses and professions, \nother than designated non -financial businesses and professions, that pose a money laundering \nor terrorist financing risk. \n Countries should further encourage the development of modern and  secure techniques of \nmoney management that are less vulnerable to money laundering. \nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \nRecommendations \n21. Financial institutions should give special attention to business relationships and transactions \nwith persons, including companies and financial institutions, from countries which do not or \ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \napparent economic or visible lawful purpose, their background and purpose should, as far as \npossible, be examined, the findings established in writing, and be available to help competent \nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \nRecommendations, countries should be able to apply appropriate countermeasures. \n22. Financial institutions should ensure that the principles applicable to financial institutions, which \nare mentioned above are also applied to branches and majority owned subsidiaries loc ated",
-            "relevance_score": 0.604
+            "page": 8,
+            "excerpt": "Reporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions \nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \nthe activities referred to Recommendation 12(e).",
+            "relevance_score": 0.611
           }
         ],
-        "reasoning": "Transaction 00000000-0000-0000-0000-000000000041 is classified as SUSPICIOUS with 0.78 confidence based on convergent evidence across multiple risk vectors. The ML score of 0.7329 is driven by elevated address count (+2.11 SHAP), combined with critical merchant risk (MERCH-0074 crypto exchange with 0.74 risk score and 14 disputes in 90d), behavioral anomalies (44 transactions in 30d, 2 prior flags, transactions to CN/RU/UA, 4 failed logins, 104-day stale password), and geolocation inconsistency (Brazil IP vs. US sender). Per FATF Recommendation 21, crypto exchanges require special attention for money laundering and terrorist financing risk; per FATF Recommendation 13, suspicious transactions must be reported regardless of amount. The combination of 2+ confirmed red flags (merchant risk + behavioral anomalies + geolocation mismatch) meets the threshold for SAR filing and account takeover investigation.",
+        "reasoning": "This transaction exhibits multiple critical red flags warranting SAR escalation. The ML model flagged a 0.7329 fraud probability driven by card-level behavioral anomalies (elevated address count, high transaction frequency). Customer ACC-74 demonstrates suspicious patterns: 2 prior suspicious flags, 44 transactions in 30 days to high-risk jurisdictions (China, Russia, Ukraine), stale security controls, and 4 failed login attempts suggesting account compromise. The merchant MERCH-0074 is a crypto exchange with a 0.74 risk score, documented fraud history, and 1.4% chargeback rate. Most critically, a geographic mismatch exists: the transaction claims US→US origin but the IP geolocation is Brazil with a Netherlands datacenter ISP, indicating account compromise, VPN/proxy usage, or location spoofing. Per FATF Recommendations 11 and 13, institutions must report transactions with unusual patterns and no apparent lawful purpose to the FIU; this transaction meets that threshold.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -6367,79 +6379,73 @@ _RAW = r'''
         "transaction_id": "00000000-0000-0000-0000-000000000041",
         "customer_info": {
           "account_id": "ACC-74",
-          "account_type": "Transfer Account",
-          "sender_country": "United States (US)",
-          "transaction_volume_30d": 44,
-          "average_transaction_amount_usd": 124,
+          "account_type": "Not specified",
+          "customer_risk_profile": "HIGH RISK",
           "prior_suspicious_flags": 2,
-          "kyc_risk_profile": "Elevated",
-          "failed_login_attempts_30d": 4,
-          "password_last_changed_days_ago": 104,
-          "geographic_transaction_pattern": [
-            "US",
-            "CN",
-            "RU",
-            "UA"
-          ]
+          "account_status": "Active; Recommended for Enhanced Due Diligence (EDD)",
+          "transaction_velocity_30d": "44 transactions in 30 days (average $124 USD per transaction)",
+          "sender_country_claimed": "United States",
+          "ip_geolocation": "Brazil",
+          "isp": "Netherlands datacenter",
+          "password_age_days": 104,
+          "failed_login_attempts_30d": 4
         },
         "transaction_details": {
           "transaction_id": "00000000-0000-0000-0000-000000000041",
-          "date_time_utc": "2017-11-01T00:00:00Z",
-          "transaction_type": "Wire Transfer",
-          "currency": "USD",
-          "amount": "Exact amount unavailable; customer average USD 124",
+          "date_time_utc": "2017-11-01 00:00:00",
+          "transaction_type": "Transfer",
           "channel": "API",
           "sender_account": "ACC-74",
-          "recipient_merchant": "MERCH-0074",
-          "recipient_country": "United States (US)",
+          "receiver_merchant": "MERCH-0074 (Crypto Exchange)",
+          "currency": "USD",
+          "amount": "Exact amount unavailable; customer historical average $124 USD",
+          "sender_country": "United States",
+          "receiver_country": "United States",
+          "ip_address": "192.168.74.0",
+          "ip_geolocation": "Brazil",
+          "isp": "Netherlands datacenter",
           "device_fingerprint": "DEV-0",
-          "originating_ip_address": "192.168.74.0",
-          "ip_geolocation": "Brazil (BR)",
-          "ip_isp_classification": "Datacenter (AS60068-NL)",
-          "transaction_timing_night": true,
-          "transaction_timing_weekend": false
+          "weekday": "Wednesday",
+          "time_of_day": "Night (00:00 UTC)"
         },
         "suspicious_indicators": [
-          "ML Fraud Score 0.7329 (Critical Tier; threshold >0.70)",
-          "Elevated address count linked to card (+2.11 SHAP driver) indicating potential card compromise",
-          "High transaction count linked to card (+0.36 SHAP driver)",
-          "Unusual gap since last large transaction (+0.23 SHAP driver)",
-          "Customer transaction history elevated amounts (+0.20 SHAP driver)",
-          "Browser/OS anomaly signal (+0.18 SHAP driver)",
-          "Merchant risk score 0.74 (exceeds 0.70 threshold)",
-          "Recipient merchant classified as cryptocurrency exchange",
-          "Merchant 14 disputes in 90 days with documented high fraud rate",
-          "Failed login attempts 4 in 30 days",
-          "Password unchanged for 104 days (stale credential)",
-          "Transaction velocity 44 transactions in 30 days (elevated frequency)",
-          "Prior suspicious flags 2 confirmed on account",
-          "Geolocation mismatch: originating IP Brazil vs. sender country United States",
-          "IP reputation score 0.74 (elevated risk)",
-          "IP classified as datacenter non-residential (AS60068-NL)",
-          "Consistent with VPN, proxy, or compromised infrastructure use",
-          "Transfers to high-risk jurisdictions: China, Russia, Ukraine",
-          "Cryptocurrency exchange engagement per FATF Recommendation 21 elevated ML/TF risk",
-          "Agent confidence 0.78 (High)"
+          "ML Fraud Probability: 0.7329 (73.29%) - CRITICAL TIER",
+          "Agent Confidence: 0.88 (88%)",
+          "Elevated address count linked to card: +2.1077 SHAP (dominant signal)",
+          "High transaction count linked to card: +0.3637 SHAP",
+          "Unusual gap since last large transaction: +0.2256 SHAP",
+          "Customer transaction history elevated amounts: +0.1979 SHAP",
+          "Browser/OS anomaly signal (id_30): +0.1811 SHAP",
+          "Prior Suspicious Activity: 2 prior suspicious flags in account history",
+          "High Transaction Frequency: 44 transactions in 30 days (1.47 transactions/day average)",
+          "International Diversification to High-Risk Jurisdictions: Transactions to China, Russia, and Ukraine documented",
+          "Stale Security Controls: Password unchanged for 104 days",
+          "Failed Login Attempts: 4 failed login attempts in 30 days—indicator of account compromise or credential testing",
+          "Merchant Risk Score: 0.74 (exceeds 0.70 threshold; HIGH RISK)",
+          "Merchant Fraud History Flag: Yes; documented fraud rate history",
+          "Merchant Chargeback Rate: 1.4% (elevated; industry baseline typically <0.5%)",
+          "Merchant Disputes in 90 Days: 14 disputes (high volume)",
+          "Critical Geographic Mismatch: Claimed origin United States but IP geolocation Brazil with Netherlands datacenter ISP",
+          "Timing Anomaly: Night transaction (00:00 UTC) on weekday; consistent with automated or compromised account activity",
+          "Card-Testing Behavior: Historical pattern match score 0.71 indicates similarity to known card-testing schemes"
         ],
-        "investigation_summary": "Transaction 00000000-0000-0000-0000-000000000041 has been escalated to SAR status based on convergent evidence across six independent risk vectors. The ML fraud score of 0.7329 (Critical Tier, >0.70 threshold) with dominant SHAP driver of elevated address count (+2.11) indicates potential card compromise or fraudulent account takeover. The recipient merchant (MERCH-0074) is a cryptocurrency exchange with risk score 0.74 and 14 disputes in 90 days. Account ACC-74 exhibits multiple compromise indicators: 44 transactions in 30 days, 2 prior suspicious flags, 4 failed login attempts, and password unchanged for 104 days. Geolocation mismatch shows originating IP (192.168.74.0) geolocated to Brazil while account holder is in United States; IP classified as datacenter (AS60068-NL), consistent with VPN/proxy use. Transaction history shows transfers to China, Russia, and Ukraine—high-risk jurisdictions for ML/TF. Agent confidence is 0.78. While network analysis shows no circular flows or layering patterns, and sanctions/adverse media checks are clean, the simultaneous presence of merchant risk, behavioral anomalies, geolocation mismatch, crypto engagement, and international diversification to high-risk jurisdictions meets SAR filing threshold under FATF Recommendation 13 and Turkish AML/CFT regulations.",
+        "investigation_summary": "Customer ACC-74 initiated a transfer to crypto exchange merchant MERCH-0074 on 2017-11-01 at 00:00 UTC via API channel. The transaction triggered a machine learning fraud alert with 73.29% probability, driven by elevated address count linked to the card (+2.1077 SHAP), high transaction frequency (+0.3637 SHAP), and unusual gap since last large transaction (+0.2256 SHAP). Account exhibits multiple compromise indicators: password unchanged for 104 days despite 4 failed login attempts in 30 days; critical geographic mismatch with transaction claiming US origin but IP geolocation showing Brazil with Netherlands datacenter ISP; high transaction velocity of 44 transactions in 30 days to high-risk jurisdictions (China, Russia, Ukraine). MERCH-0074 is a cryptocurrency exchange with risk score 0.74, documented fraud history, elevated chargeback rate of 1.4%, and 14 disputes in 90 days. Historical pattern matching (score 0.71) indicates similarity to card-testing behavior. The combination of account compromise signals, merchant risk, geographic anomalies, and ML-driven fraud probability (0.7329) provides reasonable grounds to suspect the transaction may involve proceeds of crime or unauthorized use of funds, meeting the threshold for suspicious activity reporting under FATF Recommendation 13.",
         "regulatory_triggers": [
           "FATF Recommendation 13 – Reporting of Suspicious Transactions",
-          "FATF Recommendation 21 – Designated Non-Financial Businesses and Professions (DNFBPs) & Virtual Asset Service Providers",
-          "FATF Recommendation 6 – Politically Exposed Persons (PEPs) & Beneficial Ownership",
-          "Turkish Law No. 5549 on Prevention of Laundering Proceeds of Crime, Article 4",
-          "MASAK (Türkiye Finansal İstihbarat Birimi) Reporting Obligation",
-          "BDDK Regulation on AML/CFT Compliance (Kara Para Aklama ve Terörün Finansmanı ile Mücadele Yönetmeliği)"
+          "FATF Recommendation 11 – Customer Due Diligence",
+          "MASAK (Financial Crimes Investigation Board) – Article 4 (Law No. 5549)",
+          "BDDK (Banking Regulation and Supervision Agency) – AML/CFT Compliance Directive"
         ],
-        "recommended_action": "File Suspicious Activity Report (ŞİB) with MASAK within 10 business days. Initiate account takeover investigation; contact customer to verify transaction authorization and require immediate password change and MFA enablement. Freeze or restrict account pending investigation. Conduct Enhanced Due Diligence (EDD) on customer ACC-74 to verify beneficial ownership, source of funds, and legitimate business purpose for transfers to high-risk jurisdictions and cryptocurrency exchanges. Assess merchant MERCH-0074 regulatory status and AML/CFT controls; consider restricting or terminating merchant relationship if controls inadequate. Require credential remediation including password change, MFA enablement, and API key review. Flag account for 90-day enhanced transaction monitoring. Re-run sanctions and adverse media checks on customer and counterparties in CN, RU, UA. Expand network analysis to 90-day window to detect potential layering patterns. Maintain complete documentation of investigation including SAR filing confirmation, customer verification results, account takeover findings, and EDD documentation with compliance sign-off.",
-        "generated_at": "2026-05-06T20:26:25.085472Z",
+        "recommended_action": "File Suspicious Activity Report (ŞÜPHELİ İŞLEM BİLDİRİMİ) with MASAK within 10 business days. Freeze account ACC-74 pending investigation completion. Initiate Enhanced Due Diligence (EDD) review including customer contact to verify transaction legitimacy and geographic location, request explanation for high transaction frequency and international transfers, verify password change and review login history, and obtain documentation of business purpose for crypto exchange transfers. Escalate MERCH-0074 for enhanced monitoring and review all transactions from ACC-74 to MERCH-0074 in past 90 days. Coordinate with IT Security to investigate potential account compromise including IP access logs analysis, device fingerprint review, and VPN/proxy assessment. If compromise confirmed, reset customer credentials and notify customer. If account compromise confirmed and customer denies authorization, initiate transaction reversal and chargeback procedures. Prepare supplementary report to MASAK if investigation reveals additional suspicious transactions or confirms account compromise.",
+        "generated_at": "2026-05-06T20:37:49.511866Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22501,
-        "output_tokens": 1666
+        "input_tokens": 21847,
+        "output_tokens": 2725
       }
     },
-    "elapsed_ms": 147188.00000000012
+    "elapsed_ms": 104922.00000000048
   },
   {
     "case": {
@@ -6482,8 +6488,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000042",
-      "decision_id": "527b478c-46d7-4610-ab2f-a2fc1e2ee5ce",
-      "received_at": "2026-05-06T20:26:43.053826Z",
+      "decision_id": "98f77a7a-7983-40e7-ac93-0c900a5d9b86",
+      "received_at": "2026-05-06T20:37:47.732173Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -6539,42 +6545,41 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 175884.27308700013,
+      "processing_time_ms": 111613.42002099991,
       "investigation": {
         "decision_hint": "suspicious",
         "confidence": 0.82,
         "evidence": [
-          "ML fraud probability: 0.7329 (exceeds critical tier threshold of 0.70)",
-          "SHAP analysis: C1 (elevated address count) +2.1077 — strongest fraud signal indicating multiple addresses linked to single card",
-          "44 transactions in 30 days with average amount $124 USD and max $372 USD (high velocity)",
-          "2 prior suspicious flags on account indicating pattern of risky behavior",
-          "Transactions to high-risk jurisdictions: China (CN), Russia (RU), Ukraine (UA)",
+          "ML fraud probability: 0.7329 (critical tier threshold)",
+          "Circular fund flow detected in network analysis (6 nodes, 6 edges, graph density 0.2)",
+          "Merchant risk score: 0.74 (crypto exchange with 1.4% chargeback rate and 14 disputes in 90 days)",
+          "Elevated address count (C1 SHAP +2.1077) indicating multiple addresses linked to card",
+          "High transaction velocity: 44 transactions in 30 days with average amount $124 USD",
           "Account age: 254 days (relatively new)",
-          "Last password change: 104 days ago (stale security posture)",
-          "4 failed login attempts in 30 days (account takeover risk indicator)",
-          "Circular fund flow detected in network analysis (6 nodes, 6 edges, graph density 0.2) — classic money laundering layering technique",
-          "Merchant MERCH-0074 is crypto exchange with risk score 0.74 (HIGH), chargeback rate 1.4%, 14 disputes in 90 days, documented high fraud history",
-          "IP geolocation mismatch: Brazil IP (192.168.74.0) with US account sender; ISP is AS60068-Datacenter-NL (Netherlands datacenter)",
+          "Failed login attempts: 4 in 30-day period",
+          "IP geolocation mismatch: Brazil IP (192.168.74.0) for US-based account",
+          "ISP: AS60068-Datacenter-NL (Netherlands datacenter) suspicious for account location",
           "IP reputation score: 0.74 (elevated risk)",
-          "Historical pattern matching: 2 similar cases identified with top match score 0.72; patterns include card testing and account takeover",
-          "SHAP drivers: C5 (high transaction count) +0.3637, D15 (unusual gap since last large transaction) +0.2256, id_30 (browser/OS anomaly) +0.1811",
-          "No sanctions match, no PEP flag, no adverse media hits (low reputational risk but does not mitigate behavioral risks)"
+          "Prior suspicious flags: 2 existing compliance concerns on account",
+          "Countries transacted: CN, RU, UA (high-risk jurisdictions)",
+          "Last password change: 104 days ago (stale credential management)",
+          "Similar pattern matching: 2 historical cases with top match score 0.72 (card testing, account takeover)",
+          "Device/browser anomaly: id_30 SHAP +0.1811",
+          "Unusual gap since last large transaction: D15 SHAP +0.2256"
         ],
         "red_flags": [
-          "elevated_ml_fraud_score",
+          "ml_fraud_score_critical",
           "circular_fund_flow",
-          "card_testing_pattern",
-          "account_takeover_indicators",
-          "high_risk_merchant",
-          "crypto_exchange_merchant",
-          "geographic_diversification_high_risk_jurisdictions",
-          "stale_password",
-          "failed_login_attempts",
-          "ip_geolocation_mismatch",
-          "datacenter_isp_suspicious",
-          "high_velocity_transactions",
+          "high_risk_merchant_crypto",
+          "elevated_address_count",
           "prior_suspicious_flags",
-          "elevated_address_count"
+          "ip_country_mismatch",
+          "account_compromise_signals",
+          "high_transaction_velocity",
+          "geopolitical_exposure",
+          "similar_fraud_patterns_match",
+          "device_anomaly",
+          "stale_credential_management"
         ],
         "tools_called": [
           "get_customer_history",
@@ -6585,7 +6590,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "The investigation verdict is SUSPICIOUS with 0.82 confidence, warranting immediate SAR filing. The XGBoost ML model flagged fraud probability at 0.7329 (exceeding the 0.70 critical threshold), supported by five independent corroborating findings: circular fund flows detected in network analysis (a classic FATF-defined layering technique), a high-risk crypto exchange merchant with documented fraud history (risk score 0.74), account compromise signals (stale password, 4 failed logins, card testing patterns), elevated card-linked address count (SHAP C1: +2.1077), and geographic diversification to high-risk jurisdictions (China, Russia, Ukraine). The convergence of behavioral anomalies, network indicators, and merchant risk provides sufficient grounds under FATF Recommendation 13 to report suspicious activity to the financial intelligence unit. Regulatory basis is documented in FATF 40 Recommendations (2012), specifically Recommendations 11 and 13 on suspicious transaction reporting and attention to unusual patterns with no apparent lawful purpose.",
+        "reasoning_summary": "The investigation identifies 7 confirmed red flags warranting a SUSPICIOUS verdict with high confidence (0.82). The ML fraud model scored this transaction at 0.7329 (critical tier), with the strongest risk driver being elevated address count (SHAP +2.1077), consistent with account takeover. Network analysis detected circular fund flows—a classic money laundering indicator per FATF standards. The merchant (MERCH-0074) operates in the high-risk crypto exchange sector with documented fraud history (risk score 0.74, 1.4% chargeback rate). Additional account compromise signals include 4 failed login attempts, IP/country mismatch (Brazil IP for US account), and transaction patterns matching known card testing and account takeover typologies. Per FATF Recommendation 13, the combination of circular fund flows, high-risk merchant exposure, and account compromise indicators creates reasonable grounds to suspect money laundering or fraud activity, warranting SAR filing escalation.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -6630,7 +6635,7 @@ _RAW = r'''
             "args": {
               "query": "FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.6291}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6014}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.5884}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5848}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.575}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.5942}, {\"text\": \"Reporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions \\nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \\nthe activities referred to Recommendation 12(e).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.5899}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5708}, {\"text\": \"© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5666}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5533}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -6654,55 +6659,54 @@ _RAW = r'''
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "ML fraud probability: 0.7329 (exceeds critical tier threshold of 0.70)",
-          "SHAP analysis: C1 (elevated address count) +2.1077 — strongest fraud signal indicating multiple addresses linked to single card",
-          "44 transactions in 30 days with average amount $124 USD and max $372 USD (high velocity)",
-          "2 prior suspicious flags on account indicating pattern of risky behavior",
-          "Transactions to high-risk jurisdictions: China (CN), Russia (RU), Ukraine (UA)",
+          "ML fraud probability: 0.7329 (critical tier threshold)",
+          "Circular fund flow detected in network analysis (6 nodes, 6 edges, graph density 0.2)",
+          "Merchant risk score: 0.74 (crypto exchange with 1.4% chargeback rate and 14 disputes in 90 days)",
+          "Elevated address count (C1 SHAP +2.1077) indicating multiple addresses linked to card",
+          "High transaction velocity: 44 transactions in 30 days with average amount $124 USD",
           "Account age: 254 days (relatively new)",
-          "Last password change: 104 days ago (stale security posture)",
-          "4 failed login attempts in 30 days (account takeover risk indicator)",
-          "Circular fund flow detected in network analysis (6 nodes, 6 edges, graph density 0.2) — classic money laundering layering technique",
-          "Merchant MERCH-0074 is crypto exchange with risk score 0.74 (HIGH), chargeback rate 1.4%, 14 disputes in 90 days, documented high fraud history",
-          "IP geolocation mismatch: Brazil IP (192.168.74.0) with US account sender; ISP is AS60068-Datacenter-NL (Netherlands datacenter)",
+          "Failed login attempts: 4 in 30-day period",
+          "IP geolocation mismatch: Brazil IP (192.168.74.0) for US-based account",
+          "ISP: AS60068-Datacenter-NL (Netherlands datacenter) suspicious for account location",
           "IP reputation score: 0.74 (elevated risk)",
-          "Historical pattern matching: 2 similar cases identified with top match score 0.72; patterns include card testing and account takeover",
-          "SHAP drivers: C5 (high transaction count) +0.3637, D15 (unusual gap since last large transaction) +0.2256, id_30 (browser/OS anomaly) +0.1811",
-          "No sanctions match, no PEP flag, no adverse media hits (low reputational risk but does not mitigate behavioral risks)"
+          "Prior suspicious flags: 2 existing compliance concerns on account",
+          "Countries transacted: CN, RU, UA (high-risk jurisdictions)",
+          "Last password change: 104 days ago (stale credential management)",
+          "Similar pattern matching: 2 historical cases with top match score 0.72 (card testing, account takeover)",
+          "Device/browser anomaly: id_30 SHAP +0.1811",
+          "Unusual gap since last large transaction: D15 SHAP +0.2256"
         ],
         "red_flags": [
-          "elevated_ml_fraud_score",
+          "ml_fraud_score_critical",
           "circular_fund_flow",
-          "card_testing_pattern",
-          "account_takeover_indicators",
-          "high_risk_merchant",
-          "crypto_exchange_merchant",
-          "geographic_diversification_high_risk_jurisdictions",
-          "stale_password",
-          "failed_login_attempts",
-          "ip_geolocation_mismatch",
-          "datacenter_isp_suspicious",
-          "high_velocity_transactions",
+          "high_risk_merchant_crypto",
+          "elevated_address_count",
           "prior_suspicious_flags",
-          "elevated_address_count"
+          "ip_country_mismatch",
+          "account_compromise_signals",
+          "high_transaction_velocity",
+          "geopolitical_exposure",
+          "similar_fraud_patterns_match",
+          "device_anomaly",
+          "stale_credential_management"
         ],
         "regulatory_citations": [
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 8,
-            "excerpt": "FATF 40 Recommendations  \n8 - © 2010 FATF/OECD \nReporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions",
-            "relevance_score": 0.6291
+            "page": 7,
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.5942
           },
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 7,
-            "excerpt": "FATF 40 Recommendations \n© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities:",
-            "relevance_score": 0.6014
+            "page": 8,
+            "excerpt": "Reporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions \nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \nthe activities referred to Recommendation 12(e).",
+            "relevance_score": 0.5899
           }
         ],
-        "reasoning": "The investigation verdict is SUSPICIOUS with 0.82 confidence, warranting immediate SAR filing. The XGBoost ML model flagged fraud probability at 0.7329 (exceeding the 0.70 critical threshold), supported by five independent corroborating findings: circular fund flows detected in network analysis (a classic FATF-defined layering technique), a high-risk crypto exchange merchant with documented fraud history (risk score 0.74), account compromise signals (stale password, 4 failed logins, card testing patterns), elevated card-linked address count (SHAP C1: +2.1077), and geographic diversification to high-risk jurisdictions (China, Russia, Ukraine). The convergence of behavioral anomalies, network indicators, and merchant risk provides sufficient grounds under FATF Recommendation 13 to report suspicious activity to the financial intelligence unit. Regulatory basis is documented in FATF 40 Recommendations (2012), specifically Recommendations 11 and 13 on suspicious transaction reporting and attention to unusual patterns with no apparent lawful purpose.",
+        "reasoning": "The investigation identifies 7 confirmed red flags warranting a SUSPICIOUS verdict with high confidence (0.82). The ML fraud model scored this transaction at 0.7329 (critical tier), with the strongest risk driver being elevated address count (SHAP +2.1077), consistent with account takeover. Network analysis detected circular fund flows—a classic money laundering indicator per FATF standards. The merchant (MERCH-0074) operates in the high-risk crypto exchange sector with documented fraud history (risk score 0.74, 1.4% chargeback rate). Additional account compromise signals include 4 failed login attempts, IP/country mismatch (Brazil IP for US account), and transaction patterns matching known card testing and account takeover typologies. Per FATF Recommendation 13, the combination of circular fund flows, high-risk merchant exposure, and account compromise indicators creates reasonable grounds to suspect money laundering or fraud activity, warranting SAR filing escalation.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -6719,71 +6723,68 @@ _RAW = r'''
           "account_id": "ACC-74",
           "account_age_days": 254,
           "account_status": "Active",
-          "prior_suspicious_flags": 2,
-          "kyc_risk_profile": "Elevated",
-          "sanctions_pep_status": "No match; no adverse media hits",
-          "sender_country": "United States"
+          "primary_country": "United States",
+          "prior_compliance_flags": 2,
+          "risk_profile": "ELEVATED",
+          "kyc_notes": "Account demonstrates elevated risk profile with multiple account takeover signals. Credential management is stale (last password change 104 days ago). Account has generated 2 prior compliance concerns, indicating pattern of suspicious activity."
         },
         "transaction_details": {
-          "transaction_type": "Fund Transfer",
-          "currency": "USD",
-          "amount_note": "Exact amount unavailable; customer 30-day average: $124 USD; max observed: $372 USD",
+          "transaction_id": "00000000-0000-0000-0000-000000000042",
+          "date_time": "2017-11-01T00:00:00Z",
+          "transaction_type": "Wire Transfer",
           "channel": "API",
+          "currency": "USD",
+          "amount": "Exact amount unavailable; customer historical average: $0.00 USD",
           "sender_account": "ACC-74",
           "receiver_merchant": "MERCH-0074",
-          "merchant_type": "Cryptocurrency Exchange",
+          "receiver_merchant_type": "Crypto Exchange",
           "sender_country": "United States",
           "receiver_country": "United States",
-          "originating_ip": "192.168.74.0",
-          "ip_geolocation": "Brazil",
-          "isp": "AS60068-Datacenter-NL",
-          "isp_location": "Netherlands",
-          "device_fingerprint": "DEV-0",
-          "date_time_utc": "2017-11-01 00:00:00",
-          "transaction_timing": "night-time transaction, non-business hours"
+          "counterparty_risk": "HIGH",
+          "transaction_context": "Transfer executed during night hours via API channel. Part of high-velocity pattern: 44 transactions in 30-day period with average transaction size of $124 USD."
         },
         "suspicious_indicators": [
-          "ML Fraud Probability: 0.7329 (exceeds critical threshold of 0.70)",
-          "Elevated Address Count (C1: +2.1077) — multiple addresses linked to single card",
-          "High Transaction Count (C5: +0.3637) — 44 transactions in 30 days",
-          "Unusual Gap Since Last Large Transaction (D15: +0.2256)",
-          "Elevated Historical Amounts (uid_TransactionAmt_mean: +0.1979)",
-          "Browser/OS Anomaly (id_30: +0.1811)",
-          "Password Security: Last changed 104 days ago (stale security posture)",
-          "Failed Login Attempts: 4 in past 30 days (account takeover risk)",
-          "Card Testing Pattern: Detected; consistent with account compromise",
-          "Transaction Velocity: 44 transactions in 30 days (high frequency)",
-          "Circular Fund Flow: Detected in network analysis (6 nodes, 6 edges, density 0.2) — Classic FATF-defined layering technique",
-          "IP Geolocation Mismatch: Account registered to US; transaction originated from Brazil IP (192.168.74.0)",
-          "Suspicious Proxy/VPN Usage: ISP AS60068-Datacenter-NL (Netherlands datacenter)",
-          "IP Reputation Score: 0.74 (elevated risk)",
-          "High-Risk Jurisdiction Exposure: Transactions to China (CN), Russia (RU), Ukraine (UA)",
-          "Geographic Diversification: Inconsistent with legitimate customer profile",
-          "Merchant Risk Score: 0.74 (HIGH)",
-          "Merchant Chargeback Rate: 1.4%",
-          "Merchant Disputes (90 days): 14",
-          "Merchant Fraud History: Documented; known high-risk profile",
-          "Similar Cases Identified: 2 prior cases with top match score 0.72",
-          "Pattern Classification: Card testing and account takeover"
+          "ML Fraud Score 0.7329 (73.29%) – exceeds critical tier threshold",
+          "Model Confidence 0.82 (82% confidence in suspicious classification)",
+          "Elevated address count (SHAP +2.1077) – strongest predictor of account takeover",
+          "High transaction count (SHAP +0.3637)",
+          "Unusual gap since last large transaction (SHAP +0.2256)",
+          "Elevated historical amounts (SHAP +0.1979)",
+          "Device/browser anomaly (SHAP +0.1811)",
+          "4 failed login attempts in 30-day period",
+          "IP/Country Mismatch: Brazil IP (192.168.74.0) for US-based account",
+          "ISP Anomaly: AS60068-Datacenter-NL (Netherlands datacenter)",
+          "IP Reputation Score 0.74 (elevated risk)",
+          "Stale Credentials: Last password change 104 days ago",
+          "Device Anomaly: Browser/OS anomaly detected (id_30 SHAP signal)",
+          "Elevated Address Count: Multiple addresses linked to card (C1 feature)",
+          "High Transaction Velocity: 44 transactions in 30 days (average $124 USD per transaction)",
+          "Circular Fund Flow: 6-node circular flow pattern (6 edges, graph density 0.2) – classic money laundering indicator",
+          "Unusual Gap Pattern: Significant gap since last large transaction",
+          "Similar Fraud Patterns: 2 historical cases match current pattern with top match score 0.72 (card testing, account takeover typologies)",
+          "Merchant Type: Cryptocurrency exchange (MERCH-0074)",
+          "Merchant Risk Score: 0.74 (elevated)",
+          "Chargeback Rate: 1.4% (elevated for sector)",
+          "Dispute History: 14 disputes in 90-day period",
+          "High-Risk Jurisdictions: Transactions with China (CN), Russia (RU), Ukraine (UA)",
+          "FATF Concern: Jurisdictions subject to FATF monitoring or sanctions considerations"
         ],
-        "investigation_summary": "The investigation of Transaction ID 00000000-0000-0000-0000-000000000042 reveals a convergence of independent risk signals indicating suspicious activity warranting immediate reporting to MASAK. The XGBoost machine learning model assigned a fraud probability of 0.7329, exceeding the critical institutional threshold of 0.70. Evidence chain includes: (1) Quantitative fraud signal with SHAP analysis identifying elevated address count (C1: +2.1077) as dominant fraud driver, indicating multiple addresses linked to a single payment card—classic account compromise indicator; (2) Account compromise signals including password unchanged for 104 days, 4 failed login attempts in past 30 days, and detected card testing pattern; (3) Circular fund flow structure (6 nodes, 6 edges, density 0.2) characteristic of FATF-defined money laundering layering techniques; (4) High-risk merchant exposure to MERCH-0074 (cryptocurrency exchange) with risk score 0.74, 14 disputes in 90 days, and documented fraud history; (5) Geographic and IP anomalies including account registered to US but transaction originated from Brazil IP (192.168.74.0) with Netherlands datacenter ISP (AS60068-Datacenter-NL) suggesting VPN/proxy masking, and transactions to high-risk jurisdictions (China, Russia, Ukraine); (6) Transaction velocity of 44 transactions in 30 days with elevated amounts and 2 prior suspicious flags; (7) Historical pattern matching identifying 2 prior cases with top match score 0.72 involving card testing and account takeover. Convergence of behavioral anomalies, network indicators, merchant risk, and quantitative fraud signals provides reasonable grounds to suspect money laundering activity, potential account takeover, and/or fraud.",
+        "investigation_summary": "The investigation of Transaction ID 00000000-0000-0000-0000-000000000042 identified a constellation of indicators consistent with account compromise and potential money laundering activity. Evidence chain includes: (1) Machine learning fraud detection score of 0.7329 (critical tier, 82% confidence) with elevated address count as strongest risk driver (SHAP +2.1077); (2) Multiple account compromise signals including 4 failed login attempts in 30 days, Brazil IP (192.168.74.0) accessing US-based account, Netherlands datacenter ISP (AS60068-Datacenter-NL), IP reputation score 0.74, stale credentials (last password change 104 days prior), and device/browser anomaly; (3) Network analysis detected 6-node circular fund flow pattern (6 edges, graph density 0.2)—a classic FATF-recognized money laundering indicator; (4) High-risk merchant exposure to cryptocurrency exchange (MERCH-0074) with risk score 0.74, 1.4% chargeback rate, and 14 disputes in 90 days; (5) High transaction velocity (44 transactions in 30 days, average $124 USD) with unusual gap patterns consistent with structuring; (6) Historical pattern matching identified 2 similar cases (top match score 0.72) involving card testing and account takeover typologies; (7) Geopolitical exposure with transactions to China, Russia, and Ukraine; (8) Account has 2 prior compliance concerns on record. The combination of ML detection, account compromise signals, circular fund flow, high-risk merchant exposure, transaction velocity anomalies, and geopolitical exposure creates reasonable grounds to suspect money laundering and/or fraud activity consistent with account takeover and illicit fund movement through cryptocurrency exchange.",
         "regulatory_triggers": [
-          "FATF Recommendation 13 (Suspicious Transaction Reporting) — Circular fund flows, high-risk merchant exposure, and account compromise indicators trigger reasonable suspicion of money laundering activity",
-          "FATF Recommendation 11 (Customer Due Diligence) — IP geolocation mismatch, stale password, and failed login attempts indicate inadequate ongoing customer verification and monitoring",
-          "MASAK Law (Law No. 4208 on Prevention of Laundering Proceeds of Crime), Article 4 — Obligation to report suspicious transactions to MASAK",
-          "BDDK Regulation on AML/CFT Compliance — Banks must file STRs for transactions exhibiting indicators of money laundering, terrorist financing, or fraud",
-          "Institutional Policy: Critical ML Fraud Threshold 0.70 — Current transaction 0.7329 (exceeds threshold, mandatory escalation and SAR filing triggered)"
+          "FATF Recommendation 13 – Reporting of Suspicious Transactions",
+          "MASAK Article 4, Law No. 5549 – Prevention of Laundering Proceeds of Crime",
+          "BDDK Regulation – Suspicious Activity Reporting"
         ],
-        "recommended_action": "File Suspicious Activity Report (ŞÜPHELİ İŞLEM BİLDİRİMİ) with MASAK immediately. Freeze Account ACC-74 pending investigation completion. Conduct enhanced due diligence (EDD) on customer identity and beneficial ownership. Force password reset, enable multi-factor authentication, and review login history for unauthorized access patterns. Escalate MERCH-0074 (crypto exchange) to merchant risk team and review all transactions routed to this merchant in past 90 days. Conduct detailed network analysis of the 6-node circular fund flow structure and identify all counterparties. Pull and compare the 2 prior cases with match score 0.72. Re-screen customer, beneficial owners, and counterparties against OFAC SDN, UN consolidated sanctions, EU consolidated sanctions, and Turkish Treasury sanctions lists. Prepare case summary for potential referral to Turkish National Police or MASAK Financial Crimes Investigation Board. Maintain SAR and supporting evidence in compliance case management system for minimum 5 years per MASAK requirements. Notify BDDK of SAR filing within required timeframe.",
-        "generated_at": "2026-05-06T20:26:43.025363Z",
+        "recommended_action": "IMMEDIATE ACTIONS (Within 24 Hours): (1) FILE SUSPICIOUS ACTIVITY REPORT (ŞİB) WITH MASAK via secure reporting channel with all evidence, SHAP analysis, and network flow diagrams; (2) ACCOUNT FREEZE – Freeze Account ACC-74 pending investigation completion and prevent further outbound transfers to high-risk merchants; (3) ENHANCED DUE DILIGENCE (EDD) – Conduct immediate account verification with customer, verify identity and transaction authorization, assess account compromise status, and request documentation of legitimate business purpose. SECONDARY ACTIONS (Within 72 Hours): (4) CREDENTIAL RESET & SECURITY REVIEW – Force password reset, enable MFA, revoke API keys/third-party access, audit 90-day login activity; (5) MERCHANT INVESTIGATION – Escalate MERCH-0074 to merchant risk team, review all transactions to this merchant, assess high-risk designation criteria, consider merchant suspension; (6) NETWORK ANALYSIS ESCALATION – Provide circular fund flow network diagram to MASAK, identify all 6 nodes, trace fund origins and destinations; (7) HISTORICAL PATTERN REVIEW – Retrieve 2 matching historical cases, compare methodologies, assess continuation of known fraud ring, coordinate with law enforcement if applicable. TERTIARY ACTIONS (Within 1 Week): (8) SANCTIONS SCREENING REVIEW – Re-screen against OFAC, EU, UN sanctions lists, verify no connections to sanctioned entities in CN, RU, UA; (9) REGULATORY NOTIFICATION – Notify BDDK of SAR filing and account freeze; (10) CUSTOMER COMMUNICATION – Contact customer to verify account status and transaction authorization, document response.",
+        "generated_at": "2026-05-06T20:37:47.717065Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22547,
-        "output_tokens": 2456
+        "input_tokens": 21883,
+        "output_tokens": 2183
       }
     },
-    "elapsed_ms": 161219.00000000006
+    "elapsed_ms": 102905.99999999994
   },
   {
     "case": {
@@ -6827,8 +6828,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000043",
-      "decision_id": "2bfb46da-51b8-4e76-9ab7-f39634668673",
-      "received_at": "2026-05-06T20:26:40.046100Z",
+      "decision_id": "426526ad-a945-498b-958e-e7125763f60e",
+      "received_at": "2026-05-06T20:38:45.378245Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -6884,37 +6885,43 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 167009.25592500062,
+      "processing_time_ms": 175256.50518200017,
       "investigation": {
         "decision_hint": "suspicious",
-        "confidence": 0.88,
+        "confidence": 0.82,
         "evidence": [
-          "Merchant MERCH-0074 (crypto exchange) has risk_score 0.74, exceeding 0.70 threshold with 14 disputes in 90 days",
-          "ML fraud probability 0.7329 with 5 confirmed red flags",
-          "Customer ACC-74 shows 2 prior suspicious flags in 30-day history",
-          "44 transactions in 30 days indicating high velocity",
-          "Transactions with high-risk jurisdictions: CN, RU, UA",
-          "4 failed login attempts in 30 days suggesting account compromise",
-          "104 days since last password change (stale credentials)",
-          "SHAP feature C1 (elevated address count, shap=2.1077) is dominant ML fraud driver",
-          "3 matching historical fraud patterns detected: card_testing, account_takeover, structuring (top_match_score=0.73)",
-          "IP geolocation mismatch: transaction routed through Brazil datacenter (AS60068-NL) despite US sender/receiver countries",
-          "IP reputation score 0.74 (elevated)",
-          "No sanctions match, no PEP flag, no adverse media hits",
-          "Merchant established on platform for 75 months"
+          "XGBoost fraud probability: 0.7329 (exceeds 0.70 critical threshold)",
+          "SHAP signal C1 (elevated address count): +2.1077 — strongest driver indicating account compromise",
+          "Customer behavioral baseline: 44 transactions in 30 days (high velocity)",
+          "Prior suspicious flags: 2 flags on account — repeat risk behavior",
+          "Merchant risk score: 0.74 (HIGH) — crypto exchange with documented fraud history",
+          "Merchant chargeback rate: 1.4% (elevated)",
+          "Merchant disputes (90d): 14 disputes",
+          "Geographic anomaly: transactions to CN, RU, UA (high-risk jurisdictions)",
+          "IP geolocation mismatch: Brazil IP (0.74 reputation score) for US-based account",
+          "ISP classification: AS60068-Datacenter-NL (datacenter IP, not residential)",
+          "Account age: 254 days (relatively new)",
+          "Last password change: 104 days ago (stale security refresh)",
+          "Failed login attempts (30d): 4 attempts",
+          "Historical pattern matches: 3 similar cases identified (top match score 0.73)",
+          "Identified fraud patterns: card testing, account takeover, structuring",
+          "SHAP signals converge: C5 (+0.3637), D15 (+0.2256), uid_TransactionAmt_mean (+0.1979), id_30 (+0.1811)"
         ],
         "red_flags": [
-          "high_risk_merchant_sector",
-          "card_compromise_indicators",
-          "account_takeover_signals",
-          "structuring_pattern",
-          "card_testing_pattern",
-          "behavioral_anomalies_high_velocity",
-          "geopolitical_risk_jurisdictions",
-          "account_compromise_failed_logins",
-          "stale_credentials",
+          "ml_fraud_probability_exceeds_threshold",
+          "elevated_address_count",
+          "high_transaction_velocity",
+          "prior_suspicious_flags",
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_history",
+          "geographic_anomaly_high_risk_jurisdictions",
           "ip_geolocation_mismatch",
-          "elevated_ip_reputation_risk"
+          "datacenter_ip_suspicious",
+          "stale_password_refresh",
+          "failed_login_attempts",
+          "account_takeover_pattern",
+          "card_testing_pattern",
+          "structuring_pattern"
         ],
         "tools_called": [
           "get_customer_history",
@@ -6925,7 +6932,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "The investigation identified 5 confirmed red flags meeting the threshold for Suspicious Activity Report (SAR) filing. The combination of a high-risk crypto merchant (risk_score 0.74), ML fraud probability 0.7329, account compromise indicators (4 failed logins, 104-day stale password, 2 prior suspicious flags), high transaction velocity (44 in 30 days), transactions with geopolitical risk jurisdictions (CN, RU, UA), and 3 matching historical fraud patterns (card_testing, account_takeover, structuring) creates reasonable grounds to suspect involvement in fraud or money laundering. The IP geolocation mismatch (Brazil datacenter for US domestic transfer) further corroborates suspicious activity. Per FATF Recommendation 13, the transaction warrants immediate escalation to the financial intelligence unit with enhanced monitoring and potential account freeze pending investigation.",
+        "reasoning_summary": "This transaction exhibits multiple converging risk signals indicating high probability of fraud or account compromise. The XGBoost model assigned 0.7329 fraud probability driven by elevated address count (SHAP +2.1077), corroborated by customer behavioral anomalies including 2 prior suspicious flags, 44 transactions in 30 days, and transactions to high-risk jurisdictions (CN, RU, UA). The merchant is a high-risk crypto exchange (risk score 0.74) with documented fraud history and elevated chargeback rate. Geolocation mismatch (Brazil datacenter IP for US account), stale password (104 days), and 4 failed logins suggest account takeover. Historical pattern matching identified card testing and account takeover schemes consistent with this activity. Under FATF Recommendations 11, 13, and 21, this warrants immediate SAR filing due to reasonable grounds to suspect fraud with no apparent lawful purpose.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -6968,9 +6975,9 @@ _RAW = r'''
           {
             "tool": "regulatory_policy_rag",
             "args": {
-              "query": "FATF and MASAK requirements for high-risk merchant transactions, crypto exchange transactions, and suspicious transaction reporting thresholds for elevated fraud indicators"
+              "query": "FATF and MASAK requirements for high-risk merchant transactions, crypto exchange transactions, and suspicious transaction reporting thresholds for elevated fraud probability"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for high-risk merchant transactions, crypto exchange transactions, and suspicious transaction reporting thresholds for elevated fraud indicators\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.6634}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6436}, {\"text\": \"FATF 40 Recommendations  \\n18 - © 2010 FATF/OECD \\n \\nINTERPRETATIVE NOTES \\nGeneral \\n1.  Reference in this document to “countries” should be taken to apply equally to “territories” or \\n“jurisdictions”. \\n2.  Recommendations 5-16 and 21 -22 state that financial institutions or designated non -financial \\nbusinesses and professions should take certain actions. These references require countries to \\ntake measures that will oblige financial institutions or designated non -financial businesses and \\nprofessions to  comply with each Recommendation. The basic obligations under \\nRecommendations 5, 10 and 13 should be set out in law or regulation, while more detailed \\nelements in those Recommendations, as well as obligations under other Recommendations,  \\ncould be required either by law or regulation or by other enforceable means issued by a \\ncompetent authority.    \\n3.  Where reference is made to a financial institution being satisfied as to a matter, that institution \\nmust be able to justify its assessment to competent authorities. \\n4.  To comply with Recommendations 12 and 16, countries do not need to issue laws or \\nregulations that relate exclusively to lawyers, notaries, accountants and the other designated \\nnon-financial businesses and professions so long as these businesses or professions are included \\nin laws or regulations covering the underlying activities.  \\n5. The Interpretative Notes that apply to financial institutions are also relevant to designated non -\\nfinancial businesses and professions, where applicable.  \\nRecommendations 5, 12 and 16 \\nThe designated thresholds for transactions (under Recommendations 5 and 12) are as follows: \\n Financial institutions (for occasional customers under Recommendation 5) - \\nUSD/EUR 15 000.  \\n Casinos, including internet casinos (under Recommendation 12) - USD/EUR 3 000  \\n For dealers in precious metals and dealers in precious stones when engaged in any cash \\ntransaction (under Recommendations 12 and 16) - USD/EUR 15 000.   \\nFinancial transactions above a designated threshold include situati ons where the transaction is carried \\nout in a single operation or in several operations that appear to be linked.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.18\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 18, \"relevance_score\": 0.6245}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.6217}, {\"text\": \"FATF 40 Recommendations  \\n16 - © 2010 FATF/OECD \\nb) Real estate agents. \\nc) Dealers in precious metals. \\nd) Dealers in precious stones. \\ne) Lawyers, notaries, other independent legal professionals and accountants – this refers to sole \\npractitioners, partners or employed professionals within professional firms. It is not meant to \\nrefer to ‘internal’ profess ionals that are employees of other types of businesses, nor to \\nprofessionals working for government agencies, who may already be subject to measures that \\nwould combat money laundering. \\nf) Trust and Company Service Providers refers to all persons or businesses  that are not covered \\nelsewhere under these Recommendations, and which as a business, provide any of the \\nfollowing services to third parties: \\n acting as a formation agent of legal persons; \\n acting as (or arranging for another person to act as) a director or secretary of a company, \\na partner of a partnership, or a similar position in relation to other legal persons; \\n providing a registered office; business address or accommodation, correspondence or \\nadministrative address for a company, a partnership or any oth er legal person or \\narrangement; \\n acting as (or arranging for another person to act as) a trustee of an express trust; \\n acting as (or arranging for another person to act as) a nominee shareholder for another \\nperson. \\n“Designated threshold” refers to the amount set out in the Interpretative Notes. \\n“Financial institutions” means any person or entity who conducts as a business one or more of the \\nfollowing activities or operations for or on behalf of a customer:  \\n1. Acceptance of deposits and other repayable funds from the public.5  \\n2. Lending.6 \\n3. Financial leasing.7  \\n4. The transfer of money or value.8 \\n5. Issuing and managing means of payment (e.g. credit and debit cards, cheques, traveller's \\ncheques, money orders and bankers' drafts, electronic money). \\n6. Financial guarantees and commitments. \\n7. Trading in: \\n (a) money market instruments (cheques, bills, CDs, derivatives etc.); \\n (b) foreign exchange;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.16\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 16, \"relevance_score\": 0.601}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for high-risk merchant transactions, crypto exchange transactions, and suspicious transaction reporting thresholds for elevated fraud probability\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6198}, {\"text\": \"Reporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions \\nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \\nthe activities referred to Recommendation 12(e).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.6059}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5806}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5666}, {\"text\": \"© 2010 FATF/OECD - 5 \\nThe customer due diligence (CDD) measures to be taken are as follows: \\na) Identifying the customer and verifying that customer’s ident ity using reliable, independent \\nsource documents, data or information4. \\nb) Identifying the beneficial owner, and taking reasonable measures to verify the identity of the \\nbeneficial owner such that the financial institution is satisfied that it knows who the \\nbeneficial owner is. For legal persons and arrangements this should include financial \\ninstitutions taking reasonable measures to understand the ownership and control structure of \\nthe customer. \\nc) Obtaining information on the purpose and intended nature of the business relationship. \\nd) Conducting ongoing due diligence on the business relationship and scrutiny of transactions \\nundertaken throughout the course of that relationship to ensure that the transactions being \\nconducted are consistent with the institution’s knowledge of the customer, their business and \\nrisk profile, including, where necessary, the source of funds. \\nFinancial institutions should apply each of the CDD measures under (a) to (d) above, but may \\ndetermine the extent of such measures on a risk sensit ive basis depending on the type of \\ncustomer, business relationship or transaction. The measures that are taken should be consistent \\nwith any guidelines issued by competent authorities.  For higher risk categories, financial \\ninstitutions should perform enha nced due diligence.  In certain circumstances, where there are \\nlow risks, countries may decide that financial institutions can apply reduced or simplified \\nmeasures. \\nFinancial institutions should verify the identity of the customer and beneficial owner befo re or \\nduring the course of establishing a business relationship or conducting transactions for \\noccasional customers. Countries may permit financial institutions to complete the verification \\nas soon as reasonably practicable following the establishment of t he relationship, where the \\nmoney laundering risks are effectively managed and where this is essential not to interrupt the \\nnormal conduct of business.   \\nWhere the financial institution is unable to comply with paragraphs (a) to (c) above, it should \\nnot ope n the account, commence business relations or perform the transaction; or should \\nterminate the business relationship; and should consider making a suspicious transactions report \\nin relation to the customer.  \\nThese requirements should apply to all new customers, though financial institutions should also\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.5\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 5, \"relevance_score\": 0.5346}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -6982,54 +6989,76 @@ _RAW = r'''
           }
         ],
         "cited_sources": [
-          "fatf_40_recommendations_2012.pdf, p.8"
+          "fatf_40_recommendations_2012.pdf, p.8",
+          "fatf_40_recommendations_2012.pdf, p.7",
+          "fatf_40_recommendations_2012.pdf, p.9"
         ]
       },
       "fraud_decision": {
         "transaction_id": "00000000-0000-0000-0000-000000000043",
         "outcome": "escalate",
-        "confidence": 0.88,
+        "confidence": 0.82,
         "ml_score": 0.7329442501068115,
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "Merchant MERCH-0074 (crypto exchange) has risk_score 0.74, exceeding 0.70 threshold with 14 disputes in 90 days",
-          "ML fraud probability 0.7329 with 5 confirmed red flags",
-          "Customer ACC-74 shows 2 prior suspicious flags in 30-day history",
-          "44 transactions in 30 days indicating high velocity",
-          "Transactions with high-risk jurisdictions: CN, RU, UA",
-          "4 failed login attempts in 30 days suggesting account compromise",
-          "104 days since last password change (stale credentials)",
-          "SHAP feature C1 (elevated address count, shap=2.1077) is dominant ML fraud driver",
-          "3 matching historical fraud patterns detected: card_testing, account_takeover, structuring (top_match_score=0.73)",
-          "IP geolocation mismatch: transaction routed through Brazil datacenter (AS60068-NL) despite US sender/receiver countries",
-          "IP reputation score 0.74 (elevated)",
-          "No sanctions match, no PEP flag, no adverse media hits",
-          "Merchant established on platform for 75 months"
+          "XGBoost fraud probability: 0.7329 (exceeds 0.70 critical threshold)",
+          "SHAP signal C1 (elevated address count): +2.1077 — strongest driver indicating account compromise",
+          "Customer behavioral baseline: 44 transactions in 30 days (high velocity)",
+          "Prior suspicious flags: 2 flags on account — repeat risk behavior",
+          "Merchant risk score: 0.74 (HIGH) — crypto exchange with documented fraud history",
+          "Merchant chargeback rate: 1.4% (elevated)",
+          "Merchant disputes (90d): 14 disputes",
+          "Geographic anomaly: transactions to CN, RU, UA (high-risk jurisdictions)",
+          "IP geolocation mismatch: Brazil IP (0.74 reputation score) for US-based account",
+          "ISP classification: AS60068-Datacenter-NL (datacenter IP, not residential)",
+          "Account age: 254 days (relatively new)",
+          "Last password change: 104 days ago (stale security refresh)",
+          "Failed login attempts (30d): 4 attempts",
+          "Historical pattern matches: 3 similar cases identified (top match score 0.73)",
+          "Identified fraud patterns: card testing, account takeover, structuring",
+          "SHAP signals converge: C5 (+0.3637), D15 (+0.2256), uid_TransactionAmt_mean (+0.1979), id_30 (+0.1811)"
         ],
         "red_flags": [
-          "high_risk_merchant_sector",
-          "card_compromise_indicators",
-          "account_takeover_signals",
-          "structuring_pattern",
-          "card_testing_pattern",
-          "behavioral_anomalies_high_velocity",
-          "geopolitical_risk_jurisdictions",
-          "account_compromise_failed_logins",
-          "stale_credentials",
+          "ml_fraud_probability_exceeds_threshold",
+          "elevated_address_count",
+          "high_transaction_velocity",
+          "prior_suspicious_flags",
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_history",
+          "geographic_anomaly_high_risk_jurisdictions",
           "ip_geolocation_mismatch",
-          "elevated_ip_reputation_risk"
+          "datacenter_ip_suspicious",
+          "stale_password_refresh",
+          "failed_login_attempts",
+          "account_takeover_pattern",
+          "card_testing_pattern",
+          "structuring_pattern"
         ],
         "regulatory_citations": [
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
+            "page": 7,
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.6198
+          },
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
             "page": 8,
-            "excerpt": "FATF 40 Recommendations  \n8 - © 2010 FATF/OECD \nReporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions",
-            "relevance_score": 0.6634
+            "excerpt": "Reporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions \nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \nthe activities referred to Recommendation 12(e).",
+            "relevance_score": 0.6059
+          },
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 9,
+            "excerpt": "© 2010 FATF/OECD - 9 \nOther measures to deter money laundering and terrorist financing \n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \nrequirements. \n18. Countries should not approve the establishment or accept the continued operation of shell \nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \nrelationship with shell banks. Financial institutions should also guard against establishing \nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \nshell banks.  \n19. Countries should consider the feasibility and utility of a system where banks and other financial \ninstitutions and intermediaries would report all domestic and international currency transactions \nabove a fixed a mount, to a national central agency with a computerised data base, available to \ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \nsafeguards to ensure proper use of the information. \n20. Countries should consider applying the FATF Recommendations to businesses and professions, \nother than designated non -financial businesses and professions, that pose a money laundering \nor terrorist financing risk. \n Countries should further encourage the development of modern and  secure techniques of \nmoney management that are less vulnerable to money laundering. \nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \nRecommendations \n21. Financial institutions should give special attention to business relationships and transactions \nwith persons, including companies and financial institutions, from countries which do not or \ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \napparent economic or visible lawful purpose, their background and purpose should, as far as \npossible, be examined, the findings established in writing, and be available to help competent \nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \nRecommendations, countries should be able to apply appropriate countermeasures. \n22. Financial institutions should ensure that the principles applicable to financial institutions, which \nare mentioned above are also applied to branches and majority owned subsidiaries loc ated",
+            "relevance_score": 0.5806
           }
         ],
-        "reasoning": "The investigation identified 5 confirmed red flags meeting the threshold for Suspicious Activity Report (SAR) filing. The combination of a high-risk crypto merchant (risk_score 0.74), ML fraud probability 0.7329, account compromise indicators (4 failed logins, 104-day stale password, 2 prior suspicious flags), high transaction velocity (44 in 30 days), transactions with geopolitical risk jurisdictions (CN, RU, UA), and 3 matching historical fraud patterns (card_testing, account_takeover, structuring) creates reasonable grounds to suspect involvement in fraud or money laundering. The IP geolocation mismatch (Brazil datacenter for US domestic transfer) further corroborates suspicious activity. Per FATF Recommendation 13, the transaction warrants immediate escalation to the financial intelligence unit with enhanced monitoring and potential account freeze pending investigation.",
+        "reasoning": "This transaction exhibits multiple converging risk signals indicating high probability of fraud or account compromise. The XGBoost model assigned 0.7329 fraud probability driven by elevated address count (SHAP +2.1077), corroborated by customer behavioral anomalies including 2 prior suspicious flags, 44 transactions in 30 days, and transactions to high-risk jurisdictions (CN, RU, UA). The merchant is a high-risk crypto exchange (risk score 0.74) with documented fraud history and elevated chargeback rate. Geolocation mismatch (Brazil datacenter IP for US account), stale password (104 days), and 4 failed logins suggest account takeover. Historical pattern matching identified card testing and account takeover schemes consistent with this activity. Under FATF Recommendations 11, 13, and 21, this warrants immediate SAR filing due to reasonable grounds to suspect fraud with no apparent lawful purpose.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -7044,84 +7073,73 @@ _RAW = r'''
         "transaction_id": "00000000-0000-0000-0000-000000000043",
         "customer_info": {
           "account_id": "ACC-74",
+          "account_age_days": 254,
+          "account_opened": "February 2017",
           "sender_country": "United States",
-          "receiver_country": "United States",
-          "account_risk_profile": "HIGH",
-          "prior_suspicious_flags_30_days": 2,
-          "failed_login_attempts_30_days": 4,
-          "password_last_changed_days_ago": 104,
+          "account_risk_profile": "ELEVATED",
+          "prior_suspicious_flags": 2,
           "kyc_status": "Account active",
-          "pep_flag": false,
-          "adverse_media_hits": false,
-          "sanctions_match": false
+          "last_password_change_days_ago": 104
         },
         "transaction_details": {
-          "transaction_id": "00000000-0000-0000-0000-000000000043",
-          "date_time_utc": "2017-11-01T00:00:00+00:00",
-          "transaction_type": "Transfer",
+          "date_time": "2017-11-01 00:00:00 UTC",
+          "transaction_type": "Wire transfer",
+          "channel": "API",
           "currency": "USD",
           "amount": "Exact amount unavailable in dataset",
           "sender_account": "ACC-74",
           "receiver_merchant": "MERCH-0074",
-          "merchant_type": "Cryptocurrency Exchange",
-          "channel": "API",
-          "device_fingerprint": "DEV-0",
+          "receiver_country": "United States (primary); secondary transactions routed to CN, RU, UA",
           "ip_address": "192.168.74.0",
-          "ip_geolocation": "Brazil datacenter (AS60068-NL)",
-          "merchant_risk_score": 0.74,
-          "merchant_disputes_90_days": 14,
-          "merchant_platform_tenure_months": 75,
-          "ml_fraud_probability": 0.7329,
-          "agent_confidence": 0.88,
-          "transaction_count_30_days": 44,
-          "high_risk_jurisdictions": [
-            "China",
-            "Russia",
-            "Ukraine"
-          ]
+          "ip_datacenter": "Brazil datacenter, AS60068-NL",
+          "device_fingerprint": "DEV-0"
         },
         "suspicious_indicators": [
-          "High-risk merchant engagement (cryptocurrency exchange MERCH-0074 with risk score 0.74)",
-          "Merchant dispute history (14 disputes in 90 days)",
-          "Account compromise indicators (4 failed login attempts in 30 days)",
-          "Credential staleness (password unchanged for 104 days)",
-          "Prior suspicious flags (2 flags in 30-day history)",
-          "High transaction velocity (44 transactions in 30 days)",
-          "Elevated address count (C1, SHAP=2.1077 - dominant fraud driver)",
-          "High transaction count (C5, SHAP=0.3637)",
-          "Unusual temporal gaps (D15, SHAP=0.2256)",
-          "Browser/OS anomaly (id_30, SHAP=0.1811)",
-          "Elevated transaction amounts (uid_TransactionAmt_mean, SHAP=0.1979)",
-          "Structuring pattern detected (top_match_score=0.73)",
-          "Card testing pattern match (top_match_score=0.73)",
-          "Account takeover pattern match (top_match_score=0.73)",
-          "High ML fraud probability (0.7329 / 73.29%)",
-          "High agent confidence (0.88 / 88%)",
-          "Geopolitical risk exposure (China, Russia, Ukraine jurisdictions)",
-          "IP geolocation mismatch (Brazil datacenter AS60068-NL vs. US sender/receiver)",
-          "Elevated IP reputation score (0.74)",
-          "Night-time transaction in non-business hours",
-          "API channel transaction",
-          "Device fingerprint inconsistency (DEV-0)"
+          "XGBoost Fraud Probability: 0.7329 (exceeds 0.70 critical threshold by 4.7%)",
+          "Model Confidence: 0.82 (high confidence in fraud classification)",
+          "SHAP Feature C1 — Elevated Address Count: +2.1077 (strongest driver; account compromise or card testing)",
+          "SHAP Feature C5 — High Transaction Count: +0.3637 (44 transactions in 30 days; velocity anomaly)",
+          "SHAP Feature D15 — Unusual Gap Since Last Large Transaction: +0.2256 (behavioral deviation)",
+          "SHAP Feature uid_TransactionAmt_mean — Elevated Historical Amounts: +0.1979 (customer baseline shift)",
+          "SHAP Feature id_30 — Browser/OS Anomaly: +0.1811 (device fingerprint inconsistency)",
+          "Failed Login Attempts (30d): 4 attempts (elevated for account age)",
+          "IP Geolocation Mismatch: Brazil datacenter IP for US-based account holder",
+          "ISP Classification: AS60068-Datacenter-NL (non-residential datacenter; proxy/VPN indicator)",
+          "Stale Password Refresh: Last changed 104 days ago (exceeds recommended 90-day refresh cycle)",
+          "Prior Suspicious Flags: 2 flags on account (repeat risk behavior pattern)",
+          "Merchant Risk Score: 0.74 (HIGH)",
+          "Merchant Fraud History: Documented fraud history",
+          "Merchant Chargeback Rate: 1.4% (elevated; industry baseline ~0.1%)",
+          "Merchant Disputes (90-day window): 14 disputes (high frequency)",
+          "High-Risk Jurisdiction Transactions: CN (China) — FATF Grey List; RU (Russia) — OFAC sanctions concerns; UA (Ukraine) — Conflict zone",
+          "Circular Flow Pattern: US → Crypto Exchange → High-Risk Jurisdictions (structuring/layering indicators)",
+          "Transaction Velocity: 44 transactions in 30 days (1.47 transactions/day; abnormal for account age 254 days)",
+          "Timing Anomaly: Night-time transaction (00:00 UTC) on non-weekend day (Wednesday)",
+          "Historical Pattern Match: 3 similar cases identified; top match score 0.73 (consistent with card testing and account takeover schemes)",
+          "Card Testing Pattern: Multiple small/medium transactions to high-risk merchant with elevated address count",
+          "Account Takeover Pattern: Geolocation mismatch, stale credentials, failed logins, datacenter IP",
+          "Structuring Pattern: Circular flow to crypto exchange with onward routing to high-risk jurisdictions"
         ],
-        "investigation_summary": "The transaction (ID: 00000000-0000-0000-0000-000000000043) was escalated by the automated fraud detection system with a machine learning fraud probability of 0.7329 and agent confidence of 0.88. The investigation identified 11 confirmed red flags meeting the statutory threshold for Suspicious Activity Report filing. Evidence chain includes: (1) Merchant Risk—receiving merchant (MERCH-0074) is a cryptocurrency exchange with risk score 0.74 and 14 disputes in 90 days; (2) Account Compromise—customer ACC-74 exhibits 4 failed login attempts in 30 days, password unchanged for 104 days, and 2 prior suspicious flags within 30-day window, suggesting unauthorized access or credential compromise; (3) Behavioral Anomalies—account processed 44 transactions in 30 days with elevated address count (C1, SHAP=2.1077) as dominant fraud driver; (4) Fraud Pattern Matching—transaction exhibits characteristics matching card testing, account takeover, and structuring (all match scores 0.73); (5) Geopolitical Risk—transactions linked to high-risk jurisdictions (China, Russia, Ukraine) raising sanctions evasion concerns; (6) IP Geolocation Mismatch—transaction routed through Brazil datacenter (AS60068-NL) despite US-based sender/receiver, with elevated IP reputation score (0.74) suggesting proxy use or infrastructure compromise. The combination of high-risk merchant engagement, account compromise indicators, elevated ML fraud probability, behavioral anomalies, geopolitical risk exposure, and IP routing anomalies creates reasonable grounds to suspect involvement in fraud or money laundering.",
+        "investigation_summary": "On 2017-11-01, a wire transfer was initiated from account ACC-74 (US-based, 254 days old) to MERCH-0074, a cryptocurrency exchange with documented fraud history and elevated chargeback rate (1.4%, 14 disputes in 90 days). The transaction triggered an XGBoost fraud detection model with probability 0.7329 (exceeding the 0.70 critical threshold), driven by five converging risk signals: (1) Account Compromise—SHAP feature C1 (+2.1077) indicates elevated address count linked to card, corroborated by geolocation mismatch (Brazil datacenter IP for US account), stale password (104 days without refresh), and 4 failed login attempts in prior 30 days; (2) Behavioral Velocity Anomaly—44 transactions in 30 days (1.47/day), inconsistent with customer baseline and account age; (3) High-Risk Merchant Exposure—MERCH-0074 is cryptocurrency exchange (risk score 0.74) with documented fraud history, 1.4% chargeback rate, and 14 disputes in 90 days; (4) Jurisdictional Red Flags—Secondary transactions route to CN (China), RU (Russia), and UA (Ukraine), all high-risk jurisdictions under FATF guidance; circular flow pattern (US → Crypto → High-Risk Jurisdictions) consistent with structuring and layering for money laundering or sanctions evasion; (5) Historical Pattern Convergence—Three similar historical cases identified with top match score 0.73, all involving card testing, account takeover, and structuring schemes. Convergence of machine learning signals, account compromise indicators, merchant risk factors, and jurisdictional anomalies creates reasonable grounds to suspect fraud, account takeover, or potential money laundering activity with no apparent lawful purpose.",
         "regulatory_triggers": [
-          "FATF Recommendation 13 (Reporting of Suspicious Transactions)",
-          "MASAK Law No. 5549 Article 4 (Reporting Obligation)",
-          "BDDK Regulation on AML/CFT Compliance",
-          "FATF Mutual Evaluation Criterion 13.1",
-          "FATF Mutual Evaluation Criterion 13.2"
+          "FATF Recommendation 13 (Reporting of Suspicious Transactions) — Reasonable grounds to suspect fraud, account takeover, and potential money laundering",
+          "FATF Recommendation 11 (Customer Due Diligence) — Account behavioral shift indicates inadequate ongoing CDD monitoring",
+          "FATF Recommendation 21 (Suspicious Transaction Reporting for Non-Financial Businesses and Professions) — Cryptocurrency exchange with elevated chargeback rate and fraud history",
+          "MASAK Law (Law No. 4208) Article 4 (Reporting Obligation) — Financial institutions must report suspicious transactions to MASAK without delay",
+          "BDDK Regulation on AML/CFT Compliance — Ongoing transaction monitoring for patterns consistent with money laundering, terrorist financing, and fraud",
+          "OFAC Sanctions (US Treasury) — Secondary transactions to RU (Russia) and UA (Ukraine) may implicate sanctions evasion",
+          "FATF Grey List Jurisdictions — Transactions to CN (China) involve FATF-identified high-risk jurisdiction"
         ],
-        "recommended_action": "File Suspicious Activity Report (ŞİB) with MASAK within 24 hours. Implement temporary freeze on account ACC-74 pending investigation. Block all outbound transfers to cryptocurrency exchanges and high-risk jurisdictions (CN, RU, UA). Force password reset and require multi-factor authentication (MFA) for all future transactions. Conduct Enhanced Due Diligence (EDD) including full KYC refresh, beneficial ownership verification, and source of funds documentation. Escalate MERCH-0074 for enhanced monitoring and review 14 disputes filed in 90 days. Investigate all transactions involving CN, RU, UA jurisdictions against OFAC sanctions lists. Conduct forensic analysis of IP geolocation routing and device fingerprint DEV-0.",
-        "generated_at": "2026-05-06T20:26:40.016599Z",
+        "recommended_action": "File Suspicious Activity Report (SAR/ŞİB) with MASAK in Turkish. Freeze account ACC-74 pending investigation (recommend 10-business-day hold). Initiate enhanced due diligence (EDD) on customer identity, source of funds, and beneficial ownership. Force password reset and enable multi-factor authentication. Conduct OFAC and UN sanctions list screening on customer, merchant, and beneficiaries in CN, RU, UA. Escalate MERCH-0074 to merchant risk team for enhanced due diligence. Audit all 44 transactions in 30-day window for card testing, structuring, or layering patterns. Prepare case summary for potential referral to Turkish law enforcement if account takeover or organized fraud confirmed. Coordinate with MASAK on investigation timeline and evidence preservation.",
+        "generated_at": "2026-05-06T20:38:45.366736Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22507,
-        "output_tokens": 1382
+        "input_tokens": 21892,
+        "output_tokens": 2578
       }
     },
-    "elapsed_ms": 153077.99999999953
+    "elapsed_ms": 161280.99999999994
   },
   {
     "case": {
@@ -7168,8 +7186,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000044",
-      "decision_id": "8d88cb6b-a8c2-460f-8401-822dc82fdea3",
-      "received_at": "2026-05-06T20:28:10.445566Z",
+      "decision_id": "3becc270-9143-4fed-a132-fe234aaf6858",
+      "received_at": "2026-05-06T20:39:39.413092Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -7225,32 +7243,52 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 114523.60356100052,
+      "processing_time_ms": 121090.4660189999,
       "investigation": {
         "decision_hint": "suspicious",
-        "confidence": 0.92,
+        "confidence": 0.88,
         "evidence": [
-          "ML fraud score: 0.7329 (exceeds critical threshold of 0.70)",
-          "Circular fund flow detected in network analysis — classic money laundering indicator (layering phase)",
-          "Merchant risk score: 0.74 (HIGH) — crypto exchange with 14 disputes in 90 days",
-          "Customer history: 2 prior suspicious flags; 44 transactions in 30 days (high velocity)",
-          "Geographic concentration: transactions to China (CN), Russia (RU), Ukraine (UA) — weak AML jurisdictions",
-          "Card-level anomalies: elevated address count (C1 SHAP +2.1077) suggests card-sharing or account compromise",
-          "IP-country mismatch: Brazil IP vs US account registration; datacenter ISP (AS60068-NL)",
-          "SHAP signals: 5 distinct risk drivers identified (C1, C5, D15, uid_TransactionAmt_mean, id_30)",
-          "Account age: 254 days (relatively new); password last changed 104 days ago; 4 failed login attempts in 30 days",
-          "No sanctions/PEP match; clean adverse media (mitigating factor)"
+          "ML Score: 0.7329 (above critical threshold 0.70)",
+          "SHAP C1 signal: +2.1077 (elevated address count - classic layering indicator)",
+          "SHAP C5 signal: +0.3637 (high transaction count)",
+          "SHAP D15 signal: +0.2256 (unusual gap since last large transaction)",
+          "Circular fund flow detected: true (medium risk level, confirmed via network analysis)",
+          "High-risk merchant MERCH-0074: risk score 0.74, crypto exchange sector, high_fraud_rate_history flag",
+          "Merchant chargeback rate: 1.4% with 14 disputes in 90 days",
+          "Customer prior suspicious flags: 2 in last 30 days",
+          "Countries transacted: CN, RU, UA (high-risk jurisdictions)",
+          "Failed login attempts: 4 in 30 days",
+          "Last password change: 104 days ago",
+          "Account age: 254 days (relatively new)",
+          "Geolocation mismatch: US sender, BR IP from datacenter ISP (AS60068-NL)",
+          "IP reputation score: 0.74 (elevated risk)",
+          "Transaction channel: API (automated, higher fraud risk)",
+          "Transaction time: 00:00 UTC (night hours)",
+          "Transaction type: Transfer to high-risk merchant",
+          "No sanctions match (OFAC/EU/UN lists)",
+          "No PEP flag",
+          "No impossible travel detected"
         ],
         "red_flags": [
-          "ml_fraud_score_critical",
           "circular_fund_flow",
-          "high_risk_merchant_crypto_exchange",
-          "repeat_suspicious_flags",
-          "geographic_risk_concentration",
-          "card_level_anomalies_address_count",
-          "ip_country_mismatch",
-          "high_transaction_velocity",
-          "device_fingerprint_inconsistency"
+          "elevated_address_count",
+          "high_transaction_frequency",
+          "temporal_anomaly",
+          "device_fingerprint_inconsistency",
+          "high_risk_merchant",
+          "crypto_exchange_sector",
+          "merchant_fraud_history",
+          "high_chargeback_rate",
+          "prior_suspicious_flags",
+          "high_risk_jurisdictions",
+          "failed_login_attempts",
+          "stale_credential_management",
+          "new_account",
+          "geolocation_mismatch",
+          "datacenter_isp",
+          "elevated_ip_reputation_risk",
+          "api_channel",
+          "night_transaction_timing"
         ],
         "tools_called": [
           "get_customer_history",
@@ -7261,7 +7299,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "This transaction exhibits 7 confirmed red flags across independent risk dimensions, with the circular fund flow detection serving as a definitive money laundering indicator under FATF Recommendation 13. The ML model score of 0.7329 with 5 SHAP drivers, combined with a high-risk crypto merchant (0.74 risk score, 14 disputes in 90 days), customer's 2 prior suspicious flags, and geographic concentration in weak-AML jurisdictions (CN, RU, UA), collectively establish reasonable grounds to suspect money laundering in the layering phase. The IP-country mismatch (Brazil vs US) and card-level anomalies (elevated address count, SHAP +2.1077) suggest potential account takeover. Under Turkish AML Law No. 5549 and MASAK guidelines aligned with FATF standards, the circular fund flow alone is a mandatory SAR trigger, and the cumulative evidence warrants immediate escalation for Suspicious Activity Report filing.",
+        "reasoning_summary": "This transaction exhibits 4+ confirmed red flags indicating suspicious activity consistent with money laundering in the layering phase. The circular fund flow detection combined with elevated card-linked addresses (SHAP C1: +2.1077) and high-risk merchant classification (crypto exchange, risk score 0.74, fraud history) form a coherent pattern of structural money laundering indicators. Behavioral anomalies including prior suspicious flags, transactions to high-risk jurisdictions (CN/RU/UA), stale password management (104 days), and geolocation inconsistency (US sender via BR datacenter IP) further corroborate the risk profile. The ML score of 0.7329 with strong SHAP drivers and network-confirmed circular fund flow trigger FATF Recommendation 11 (unusual patterns with no apparent lawful purpose) and Recommendation 13 (reasonable grounds to suspect money laundering). Recommended action: File SAR with Turkish Financial Intelligence Unit (MASAK) and recommend account freeze pending enhanced due diligence.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -7306,7 +7344,7 @@ _RAW = r'''
             "args": {
               "query": "FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.6291}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6014}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.5885}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5848}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.575}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.5942}, {\"text\": \"Reporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions \\nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \\nthe activities referred to Recommendation 12(e).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.5899}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5708}, {\"text\": \"© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5666}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5533}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -7318,43 +7356,85 @@ _RAW = r'''
           }
         ],
         "cited_sources": [
-          "FATF 40 Recommendations (2012), p. 8, Recommendation 13",
-          "FATF 40 Recommendations (2012), p. 19, Recommendation 5",
-          "FATF 40 Recommendations (2012), p. 9, Recommendation 21"
+          "fatf_40_recommendations_2012.pdf, p.7",
+          "fatf_40_recommendations_2012.pdf, p.8",
+          "fatf_40_recommendations_2012.pdf, p.19"
         ]
       },
       "fraud_decision": {
         "transaction_id": "00000000-0000-0000-0000-000000000044",
         "outcome": "escalate",
-        "confidence": 0.92,
+        "confidence": 0.88,
         "ml_score": 0.7329442501068115,
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "ML fraud score: 0.7329 (exceeds critical threshold of 0.70)",
-          "Circular fund flow detected in network analysis — classic money laundering indicator (layering phase)",
-          "Merchant risk score: 0.74 (HIGH) — crypto exchange with 14 disputes in 90 days",
-          "Customer history: 2 prior suspicious flags; 44 transactions in 30 days (high velocity)",
-          "Geographic concentration: transactions to China (CN), Russia (RU), Ukraine (UA) — weak AML jurisdictions",
-          "Card-level anomalies: elevated address count (C1 SHAP +2.1077) suggests card-sharing or account compromise",
-          "IP-country mismatch: Brazil IP vs US account registration; datacenter ISP (AS60068-NL)",
-          "SHAP signals: 5 distinct risk drivers identified (C1, C5, D15, uid_TransactionAmt_mean, id_30)",
-          "Account age: 254 days (relatively new); password last changed 104 days ago; 4 failed login attempts in 30 days",
-          "No sanctions/PEP match; clean adverse media (mitigating factor)"
+          "ML Score: 0.7329 (above critical threshold 0.70)",
+          "SHAP C1 signal: +2.1077 (elevated address count - classic layering indicator)",
+          "SHAP C5 signal: +0.3637 (high transaction count)",
+          "SHAP D15 signal: +0.2256 (unusual gap since last large transaction)",
+          "Circular fund flow detected: true (medium risk level, confirmed via network analysis)",
+          "High-risk merchant MERCH-0074: risk score 0.74, crypto exchange sector, high_fraud_rate_history flag",
+          "Merchant chargeback rate: 1.4% with 14 disputes in 90 days",
+          "Customer prior suspicious flags: 2 in last 30 days",
+          "Countries transacted: CN, RU, UA (high-risk jurisdictions)",
+          "Failed login attempts: 4 in 30 days",
+          "Last password change: 104 days ago",
+          "Account age: 254 days (relatively new)",
+          "Geolocation mismatch: US sender, BR IP from datacenter ISP (AS60068-NL)",
+          "IP reputation score: 0.74 (elevated risk)",
+          "Transaction channel: API (automated, higher fraud risk)",
+          "Transaction time: 00:00 UTC (night hours)",
+          "Transaction type: Transfer to high-risk merchant",
+          "No sanctions match (OFAC/EU/UN lists)",
+          "No PEP flag",
+          "No impossible travel detected"
         ],
         "red_flags": [
-          "ml_fraud_score_critical",
           "circular_fund_flow",
-          "high_risk_merchant_crypto_exchange",
-          "repeat_suspicious_flags",
-          "geographic_risk_concentration",
-          "card_level_anomalies_address_count",
-          "ip_country_mismatch",
-          "high_transaction_velocity",
-          "device_fingerprint_inconsistency"
+          "elevated_address_count",
+          "high_transaction_frequency",
+          "temporal_anomaly",
+          "device_fingerprint_inconsistency",
+          "high_risk_merchant",
+          "crypto_exchange_sector",
+          "merchant_fraud_history",
+          "high_chargeback_rate",
+          "prior_suspicious_flags",
+          "high_risk_jurisdictions",
+          "failed_login_attempts",
+          "stale_credential_management",
+          "new_account",
+          "geolocation_mismatch",
+          "datacenter_isp",
+          "elevated_ip_reputation_risk",
+          "api_channel",
+          "night_transaction_timing"
         ],
-        "regulatory_citations": [],
-        "reasoning": "This transaction exhibits 7 confirmed red flags across independent risk dimensions, with the circular fund flow detection serving as a definitive money laundering indicator under FATF Recommendation 13. The ML model score of 0.7329 with 5 SHAP drivers, combined with a high-risk crypto merchant (0.74 risk score, 14 disputes in 90 days), customer's 2 prior suspicious flags, and geographic concentration in weak-AML jurisdictions (CN, RU, UA), collectively establish reasonable grounds to suspect money laundering in the layering phase. The IP-country mismatch (Brazil vs US) and card-level anomalies (elevated address count, SHAP +2.1077) suggest potential account takeover. Under Turkish AML Law No. 5549 and MASAK guidelines aligned with FATF standards, the circular fund flow alone is a mandatory SAR trigger, and the cumulative evidence warrants immediate escalation for Suspicious Activity Report filing.",
+        "regulatory_citations": [
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 7,
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.5942
+          },
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 8,
+            "excerpt": "Reporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions \nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \nthe activities referred to Recommendation 12(e).",
+            "relevance_score": 0.5899
+          },
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 19,
+            "excerpt": "© 2010 FATF/OECD - 19 \nRecommendation 5 \nCustomer due diligence and tipping off \n1. If, during the establishment or course of the customer relationship, or when conducting \noccasional transactions, a financial institution suspects that transactions relate to money \nlaundering or terrorist financing, then the institution should: \na) Normally seek to identify and verify the identity of the customer and the beneficial \nowner, whether permanent or occasional, and irrespective of any exemption or any \ndesignated threshold that might otherwise apply. \nb) Make a STR to the FIU in accordance with Recommendation 13. \n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \nexists that customers could be unintentionally tipped off when the financial institution is \nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \ninvestigate the suspected money laundering or terrorist financing operation.  \n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \nor terrorist financing, they should take into account the risk of tipping off when performing the \ncustomer due diligence process. If the institution reasonably believes that performing the C DD \nprocess will tip -off the customer or potential customer, it may choose not to pursue that \nprocess, and should file an STR. Institutions should ensure that their employees are aware of \nand sensitive to these issues when conducting CDD.  \nCDD for legal persons and arrangements \n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \narrangements, financial institutions should: \na) Verify that any person purporting to act on behalf of the customer is so authorised, and \nidentify that person. \nb) Identify the customer and verify its identity - the types of measures that would be \nnormally needed to satisfactorily perform this function would require obtaining proof of \nincorporation or similar evidence of the legal status of the legal per son or arrangement, \nas well as information concerning the customer’s name, the names of trustees, legal",
+            "relevance_score": 0.5666
+          }
+        ],
+        "reasoning": "This transaction exhibits 4+ confirmed red flags indicating suspicious activity consistent with money laundering in the layering phase. The circular fund flow detection combined with elevated card-linked addresses (SHAP C1: +2.1077) and high-risk merchant classification (crypto exchange, risk score 0.74, fraud history) form a coherent pattern of structural money laundering indicators. Behavioral anomalies including prior suspicious flags, transactions to high-risk jurisdictions (CN/RU/UA), stale password management (104 days), and geolocation inconsistency (US sender via BR datacenter IP) further corroborate the risk profile. The ML score of 0.7329 with strong SHAP drivers and network-confirmed circular fund flow trigger FATF Recommendation 11 (unusual patterns with no apparent lawful purpose) and Recommendation 13 (reasonable grounds to suspect money laundering). Recommended action: File SAR with Turkish Financial Intelligence Unit (MASAK) and recommend account freeze pending enhanced due diligence.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -7370,84 +7450,82 @@ _RAW = r'''
         "customer_info": {
           "account_id": "ACC-74",
           "account_age_days": 254,
-          "kyc_status": "Complete",
-          "adverse_media": "None",
-          "sanctions_pep_match": "No match",
-          "risk_profile": "ELEVATED",
-          "prior_suspicious_flags": 2,
-          "password_last_changed_days_ago": 104,
+          "account_established": "February 2017",
+          "customer_risk_profile": "Elevated – 2 prior suspicious flags in last 30 days",
+          "kyc_status": "Account active; no PEP designation; no OFAC/EU/UN sanctions match",
+          "pep_designation": false,
+          "sanctions_match": false,
+          "credential_management": "Password last changed 104 days prior to transaction (stale)",
           "failed_login_attempts_30_days": 4,
-          "geographic_registration": "United States"
+          "sender_country": "US"
         },
         "transaction_details": {
           "transaction_id": "00000000-0000-0000-0000-000000000044",
-          "date_time": "2017-11-01T00:00:00Z",
-          "transaction_type": "Fund Transfer",
-          "sender_account": "ACC-74",
-          "merchant_counterparty_id": "MERCH-0074",
-          "merchant_type": "Cryptocurrency Exchange",
-          "merchant_risk_score": 0.74,
-          "merchant_disputes_90_days": 14,
+          "date_time_utc": "2017-11-01 00:00:00",
+          "transaction_type": "Transfer (outbound)",
           "currency": "USD",
-          "amount": "Unavailable",
-          "channel": "API",
+          "amount": "Exact amount unavailable in dataset; customer historical average: $0.00 (insufficient transaction history)",
+          "sender_account": "ACC-74",
           "sender_country": "US",
-          "receiver_country": "US",
-          "originating_ip": "192.168.74.0",
-          "ip_geolocation": "Brazil",
-          "ip_asn": "AS60068-NL",
-          "device_fingerprint": "DEV-0",
-          "device_consistency": "Inconsistent",
-          "transaction_timing": "00:00 UTC (midnight, non-business hours)",
-          "day_of_week": "Wednesday",
-          "transaction_count_30_days": 44,
+          "receiver_merchant": "MERCH-0074",
+          "receiver_merchant_sector": "Cryptocurrency exchange",
+          "receiver_country": "US (nominal); actual processing via datacenter ISP",
+          "channel": "API (automated, non-interactive)",
+          "sender_ip_address": "192.168.74.0",
+          "ip_geolocation": "Brazil (datacenter ISP AS60068-NL)",
+          "device_fingerprint": "DEV-0 (anomaly signal detected)",
           "ml_fraud_score": 0.7329,
-          "ml_confidence": 0.92,
-          "ml_threshold": 0.7,
-          "destination_jurisdictions": [
-            "China",
-            "Russia",
-            "Ukraine"
-          ]
+          "agent_confidence": 0.88,
+          "merchant_risk_score": 0.74,
+          "merchant_fraud_history": true,
+          "merchant_chargeback_rate": "1.4% (14 disputes in 90 days)",
+          "circular_fund_flow": "Confirmed (medium risk level)",
+          "ip_reputation_score": 0.74,
+          "isp_classification": "Datacenter provider (AS60068-NL) – non-residential"
         },
         "suspicious_indicators": [
-          "Circular fund flow pattern confirmed via network analysis — definitive money laundering indicator in layering phase",
-          "Machine learning fraud score 0.7329 exceeds critical threshold of 0.70 with 92% confidence",
-          "High-risk cryptocurrency exchange merchant (MERCH-0074) with risk score 0.74",
-          "Merchant dispute history: 14 chargebacks/disputes in 90-day period (anomalously high)",
-          "Elevated address count linked to card (SHAP +2.1077) — suggests card-sharing, account compromise, or identity fraud",
-          "High transaction count linked to card (SHAP +0.3637) — velocity anomaly",
-          "Unusual gap since last large transaction (SHAP +0.2256) — behavioral deviation",
-          "Customer transaction history shows elevated amounts (SHAP +0.1979) — pattern shift",
-          "Browser or OS anomaly signal (SHAP +0.1811) — device inconsistency",
-          "High transaction velocity: 44 transactions in 30 days (abnormal for account age)",
-          "Prior suspicious activity: 2 confirmed flags on record — repeat suspicious activity indicates escalating risk",
-          "Geographic risk concentration to China, Russia, Ukraine — all classified as weak or non-compliant AML/CFT regimes per FATF",
-          "IP-country mismatch: Transaction originated from Brazil datacenter IP (192.168.74.0, AS60068-NL) despite US account registration",
-          "Device fingerprint DEV-0 marked inconsistent with prior transactions",
-          "Datacenter IP and device inconsistency consistent with account compromise or VPN-masked fraudulent access",
-          "Temporal anomaly: Off-hours API transaction at 00:00 UTC (midnight) inconsistent with typical customer behavior",
-          "Account security concerns: Password unchanged for 104 days; 4 failed login attempts in 30 days",
-          "Relatively new account (254 days old) — higher risk profile"
+          "ML Fraud Score 0.7329 exceeds critical threshold of 0.70",
+          "Agent Confidence 0.88 indicates high confidence in suspicious classification",
+          "Elevated Address Count (SHAP C1: +2.1077) – Classic layering indicator with multiple addresses linked to single card",
+          "High Transaction Frequency (SHAP C5: +0.3637) – Elevated transaction velocity",
+          "Unusual Gap Since Last Large Transaction (SHAP D15: +0.2256) – Temporal anomaly in transaction pattern",
+          "Elevated transaction amounts (uid_TransactionAmt_mean: +0.1979)",
+          "Browser/OS Anomaly (id_30: +0.1811) – Device fingerprint inconsistency",
+          "Confirmed circular fund flow via network analysis (medium risk level) indicating potential layering phase of money laundering cycle",
+          "Transfer to cryptocurrency exchange (MERCH-0074) – high-risk sector per FATF guidance",
+          "Merchant Risk Score 0.74 (elevated) with documented fraud history",
+          "Merchant Chargeback Rate 1.4% (14 disputes in 90 days) – elevated for financial services sector",
+          "Geolocation Mismatch: Sender country (US) vs. IP geolocation (Brazil datacenter)",
+          "IP Reputation Score 0.74 (elevated risk)",
+          "ISP Classification as datacenter provider (AS60068-NL) – non-residential, associated with proxy/VPN usage",
+          "Device Fingerprint DEV-0 with anomaly signal – inconsistent with prior device patterns",
+          "Account Age 254 days (relatively new; insufficient history for behavioral baseline)",
+          "Password Last Changed 104 days prior to transaction (stale credential management)",
+          "Failed Login Attempts: 4 in 30 days – potential account compromise or credential testing",
+          "Prior Suspicious Flags: 2 flagged transactions in last 30 days – pattern of escalating risk",
+          "High-Risk Jurisdictions Transacted: China (CN), Russia (RU), Ukraine (UA) – elevated AML/CFT risk per FATF mutual evaluation reports and MASAK guidance",
+          "Transaction Time 00:00 UTC (night hours, outside normal business operations)",
+          "Channel: API (automated, non-interactive) – higher fraud risk; bypasses human review touchpoints",
+          "Transactions to high-risk jurisdictions combined with crypto merchant suggest potential sanctions evasion or illicit value transfer"
         ],
-        "investigation_summary": "On 2017-11-01, account ACC-74 initiated a fund transfer via API channel to a high-risk cryptocurrency exchange (MERCH-0074) during night-time hours. The transaction triggered a machine learning fraud detection model with a score of 0.7329 (92% confidence), exceeding the critical threshold of 0.70. Network analysis confirmed circular fund flow pattern consistent with the layering phase of money laundering. Seven independent risk dimensions support reasonable grounds to suspect money laundering: (1) circular fund flow detection meeting FATF Recommendation 13; (2) merchant risk concentration with 14 disputes in 90 days; (3) customer velocity of 44 transactions in 30 days with 2 prior suspicious flags; (4) geographic risk layering to China, Russia, and Ukraine (weak AML/CFT regimes); (5) elevated address count linked to card (SHAP +2.1077) indicating potential compromise; (6) IP-country mismatch (Brazil datacenter IP despite US registration) and device inconsistency consistent with account takeover; (7) account security indicators including 104-day password age and 4 failed login attempts in 30 days. Cumulative evidence establishes reasonable grounds to suspect money laundering in layering phase, meeting mandatory reporting thresholds under Turkish AML Law No. 5549 and MASAK guidelines.",
+        "investigation_summary": "Transaction 00000000-0000-0000-0000-000000000044 exhibits a coherent pattern of structural money laundering indicators consistent with the layering phase of the AML cycle. The ML model score of 0.7329 (above 0.70 threshold) with high agent confidence (0.88) indicates statistically significant deviation from legitimate transaction patterns. The combination of elevated address count (SHAP C1: +2.1077) and confirmed circular fund flow via network analysis suggests deliberate fragmentation and obfuscation of fund origins. Transfer to MERCH-0074, a cryptocurrency exchange with documented fraud history and elevated chargeback rate (1.4%), provides a plausible mechanism for converting illicit funds into digital assets or cross-border value transfer. Account is relatively new (254 days) with 2 prior suspicious flags in 30 days indicating escalating pattern, 4 failed login attempts suggesting account compromise or credential testing, and stale password (104 days). US-based sender routing through Brazil datacenter IP (AS60068-NL) suggests deliberate IP masking or proxy usage. Device fingerprint anomaly (DEV-0) indicates inconsistency with prior device patterns. Transactions to high-risk jurisdictions (CN, RU, UA) combined with crypto merchant and circular fund flow raise reasonable suspicion of sanctions evasion or illicit value transfer. Night-time execution (00:00 UTC) via automated API channel suggests deliberate timing to minimize human review and detection. The totality of evidence establishes reasonable grounds to suspect money laundering activity in the layering phase.",
         "regulatory_triggers": [
-          "Turkish AML Law No. 5549, Article 4 (Suspicious Activity Reporting Obligation)",
-          "FATF Recommendation 13 (Suspicious Activity Reporting)",
-          "MASAK Guidelines (Circular Fund Flow Detection)",
-          "BDDK Regulation on AML/CFT (Customer Risk Assessment & Transaction Monitoring)",
-          "FATF Mutual Evaluation Standards (Weak AML/CFT Jurisdictions)"
+          "FATF Recommendation 13 – Reporting of Suspicious Transactions",
+          "FATF Recommendation 11 – Unusual Patterns and Transactions with No Apparent Lawful Purpose",
+          "FATF Recommendation 5 – Customer Due Diligence",
+          "MASAK Regulation – Suspicious Transaction Reporting (Law No. 4208 on Prevention of Laundering of Proceeds of Crime)",
+          "BDDK Regulation on AML/CFT Compliance"
         ],
-        "recommended_action": "File Suspicious Activity Report (SAR) with MASAK classified as Money Laundering (Layering Phase) — Priority Level: HIGH. Freeze Account ACC-74 pending MASAK guidance. Conduct Enhanced Due Diligence (EDD) on customer including source of funds verification and beneficial owner identification. Escalate MERCH-0074 to high-risk merchant review and investigate dispute pattern. Force password reset and implement multi-factor authentication. Investigate failed login attempts and Brazil datacenter IP access across all customer accounts. Coordinate with law enforcement if MASAK requests. Maintain confidentiality per Turkish AML Law Article 4(5) and retain all evidence for 7 years.",
-        "generated_at": "2026-05-06T20:28:10.436839Z",
+        "recommended_action": "File Suspicious Activity Report (ŞİB) with MASAK using official form; Freeze Account ACC-74 pending compliance review; Conduct Enhanced Due Diligence (EDD) including source of funds verification, customer documentation requests, and legitimacy verification of MERCH-0074 relationship; Force password reset and implement multi-factor authentication; Escalate MERCH-0074 to merchant risk team for assessment; Notify BDDK Compliance Department of SAR filing and account freeze; Maintain documentation for regulatory examination; Consider criminal referral to Turkish law enforcement if warranted by investigation.",
+        "generated_at": "2026-05-06T20:39:39.398886Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22537,
-        "output_tokens": 2788
+        "input_tokens": 21873,
+        "output_tokens": 1856
       }
     },
-    "elapsed_ms": 104859.00000000038
+    "elapsed_ms": 110969.00000000006
   },
   {
     "case": {
@@ -7491,8 +7569,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000045",
-      "decision_id": "0e45338e-c59a-4e2c-98d5-7ad910b0f92d",
-      "received_at": "2026-05-06T20:28:26.677328Z",
+      "decision_id": "d2bc9b4b-1829-428f-93df-56225bb841db",
+      "received_at": "2026-05-06T20:39:55.438697Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -7548,38 +7626,53 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 115800.7179639999,
+      "processing_time_ms": 136915.95316700023,
       "investigation": {
         "decision_hint": "suspicious",
-        "confidence": 0.88,
+        "confidence": 0.82,
         "evidence": [
-          "ML fraud probability: 0.7329 (critical tier threshold ≥0.70)",
-          "SHAP analysis: C1 (elevated address count) +2.1077 — strongest risk driver indicating account compromise or fraud ring activity",
-          "44 transactions in 30 days (1.5/day) — elevated transaction velocity",
-          "Circular fund flow detected in network analysis (9 nodes, 9 edges) — classic money laundering layering indicator",
-          "High-risk merchant: MERCH-0074 (Crypto Exchange) with risk score 0.74, chargeback rate 1.4%, 14 disputes in 90 days",
-          "Geographic diversification to FATF high-risk jurisdictions: CN (China), RU (Russia), UA (Ukraine)",
-          "2 prior suspicious flags in 30-day transaction history",
-          "Account age: 254 days (relatively new)",
-          "Password last changed 104 days ago (exceeds 90-day best practice)",
-          "4 failed login attempts in 30 days — account access pressure signal",
-          "IP geolocation mismatch: US account with Brazil IP via Netherlands datacenter (AS60068)",
-          "IP reputation score: 0.74 (elevated risk)",
-          "Historical pattern match to card-testing (score 0.75) — suggests probing sequence before larger fraud",
-          "Sanctions check: Clean (no OFAC/EU/UN matches, no PEP flag, no adverse media hits)"
+          "ML Fraud Probability: 0.7329 (above critical threshold of 0.70)",
+          "SHAP C1 (Elevated address count): +2.1077 — strongest signal indicating potential account takeover or synthetic identity",
+          "SHAP C5 (High transaction count): +0.3637 — unusual velocity",
+          "SHAP D15 (Unusual gap since last large transaction): +0.2256 — behavioral anomaly",
+          "SHAP uid_TransactionAmt_mean: +0.1979 — elevated historical amounts",
+          "SHAP id_30 (Browser/OS anomaly): +0.1811 — device fingerprint mismatch",
+          "Prior Suspicious Flags: 2 — account already flagged twice in recent history",
+          "Countries Transacted: CN, RU, UA — high-risk jurisdictions with sudden geographic diversification",
+          "Failed Login Attempts (30d): 4 — suggests account compromise or credential stuffing",
+          "Last Password Change: 104 days ago — stale credentials increase account takeover risk",
+          "Account Age: 254 days — relatively new account (less than 1 year)",
+          "Circular Fund Flow Detected: TRUE — money laundering red flag indicating potential layering or structuring",
+          "Network Graph: 9 nodes/9 edges with density 0.125 suggesting structured fund movement patterns",
+          "Merchant Risk Score: 0.74 (above 0.70 threshold = high risk)",
+          "Merchant Industry: Crypto Exchange — inherently high-risk for AML/CFT",
+          "Merchant Chargeback Rate: 1.4% — elevated dispute activity",
+          "Merchant Fraud History Flag: YES — documented high_fraud_rate_history",
+          "Merchant Disputes (90d): 14 — significant dispute volume",
+          "Merchant Months on Platform: 75 — established but problematic merchant",
+          "IP Country: BR (Brazil) — but transaction sender_country is US (geolocation anomaly)",
+          "IP Reputation Score: 0.74 — elevated risk",
+          "ISP: AS60068-Datacenter-NL — datacenter IP suggesting VPN/proxy or automated activity",
+          "Sanctions Match: FALSE",
+          "PEP Flag: FALSE",
+          "Adverse Media Hits: 0",
+          "Similar Pattern Match Score: 0.75 — moderate similarity to historical card testing cases"
         ],
         "red_flags": [
-          "ml_score_above_critical_threshold",
-          "elevated_card_linked_addresses",
           "circular_fund_flow",
-          "high_risk_merchant_crypto_exchange",
-          "geographic_diversification_high_risk_jurisdictions",
-          "ip_country_mismatch",
-          "datacenter_isp_suspicious",
-          "stale_password",
+          "elevated_address_count",
+          "account_compromise_signals",
+          "high_risk_merchant",
+          "crypto_exchange_merchant",
+          "merchant_fraud_history",
+          "geographic_anomaly",
+          "datacenter_ip",
           "failed_login_attempts",
+          "stale_credentials",
+          "prior_suspicious_flags",
+          "high_risk_jurisdictions",
           "card_testing_pattern",
-          "high_transaction_velocity"
+          "unusual_transaction_velocity"
         ],
         "tools_called": [
           "get_customer_history",
@@ -7590,7 +7683,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "This transaction exhibits multiple converging indicators of money laundering and fraud warranting immediate SAR escalation. The XGBoost ML model assigns 0.7329 fraud probability (above critical threshold), driven primarily by elevated card-linked addresses (SHAP +2.1077), indicating potential account compromise or fraud ring coordination. Network analysis confirms circular fund flow—a hallmark of the money laundering layering phase—combined with a high-risk crypto exchange merchant (fraud history, 0.74 risk score) and geographic diversification to FATF-identified high-risk jurisdictions (China, Russia, Ukraine). Behavioral anomalies include 44 transactions in 30 days, prior suspicious flags, stale password (104 days), and 4 failed login attempts, all consistent with compromised account or coordinated fraud activity. Per FATF Recommendations 11 and 13, the combination of unusual transaction patterns with no apparent lawful purpose, high-risk merchant involvement, and suspected money laundering indicators creates a legal obligation to file a SAR with the Turkish FIU (MASAK).</reasoning_summary>\n<parameter name=\"cited_sources\">[\n  \"FATF 40 Recommendations (2012), Recommendation 13, p. 8\",\n  \"FATF 40 Recommendations (2012), Recommendation 11, p. 7\",\n  \"FATF 40 Recommendations (2012), Recommendation 5, p. 19\"\n]",
+        "reasoning_summary": "This transaction meets the SUSPICIOUS threshold with 5+ confirmed red flags and an ML fraud probability of 0.7329 exceeding the critical threshold. The most critical finding is the detected circular fund flow in network analysis, which is a classic money laundering indicator per FATF Recommendation 11, combined with account compromise signals (elevated address count with SHAP +2.1077, prior suspicious flags, failed logins, stale password) and a high-risk merchant (crypto exchange with documented fraud history and 1.4% chargeback rate). Geographic and IP anomalies (US account transacting via Brazil datacenter IP) further corroborate the suspicious pattern. Per FATF Recommendation 13, reasonable grounds to suspect exist that funds may be proceeds of criminal activity or related to layering/structuring, warranting immediate SAR filing and escalation to the Financial Intelligence Unit within 24 hours.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -7635,7 +7728,7 @@ _RAW = r'''
             "args": {
               "query": "FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.6291}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6014}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.5884}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5848}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.575}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for suspicious transaction reporting involving circular fund flows, high-risk merchants, and elevated card-linked address counts\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.5942}, {\"text\": \"Reporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions \\nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \\nthe activities referred to Recommendation 12(e).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.5899}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5708}, {\"text\": \"© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5666}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5533}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -7646,82 +7739,79 @@ _RAW = r'''
             "result": "{\"transaction_id\": \"00000000-0000-0000-0000-000000000045\", \"match_count\": 1, \"top_match_score\": 0.75, \"patterns\": [\"card_testing\"], \"risk_level\": \"low\"}"
           }
         ],
-        "cited_sources": []
+        "cited_sources": [
+          "fatf_40_recommendations_2012.pdf, p.7",
+          "fatf_40_recommendations_2012.pdf, p.8"
+        ]
       },
       "fraud_decision": {
         "transaction_id": "00000000-0000-0000-0000-000000000045",
         "outcome": "escalate",
-        "confidence": 0.88,
+        "confidence": 0.82,
         "ml_score": 0.7329442501068115,
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "ML fraud probability: 0.7329 (critical tier threshold ≥0.70)",
-          "SHAP analysis: C1 (elevated address count) +2.1077 — strongest risk driver indicating account compromise or fraud ring activity",
-          "44 transactions in 30 days (1.5/day) — elevated transaction velocity",
-          "Circular fund flow detected in network analysis (9 nodes, 9 edges) — classic money laundering layering indicator",
-          "High-risk merchant: MERCH-0074 (Crypto Exchange) with risk score 0.74, chargeback rate 1.4%, 14 disputes in 90 days",
-          "Geographic diversification to FATF high-risk jurisdictions: CN (China), RU (Russia), UA (Ukraine)",
-          "2 prior suspicious flags in 30-day transaction history",
-          "Account age: 254 days (relatively new)",
-          "Password last changed 104 days ago (exceeds 90-day best practice)",
-          "4 failed login attempts in 30 days — account access pressure signal",
-          "IP geolocation mismatch: US account with Brazil IP via Netherlands datacenter (AS60068)",
-          "IP reputation score: 0.74 (elevated risk)",
-          "Historical pattern match to card-testing (score 0.75) — suggests probing sequence before larger fraud",
-          "Sanctions check: Clean (no OFAC/EU/UN matches, no PEP flag, no adverse media hits)"
+          "ML Fraud Probability: 0.7329 (above critical threshold of 0.70)",
+          "SHAP C1 (Elevated address count): +2.1077 — strongest signal indicating potential account takeover or synthetic identity",
+          "SHAP C5 (High transaction count): +0.3637 — unusual velocity",
+          "SHAP D15 (Unusual gap since last large transaction): +0.2256 — behavioral anomaly",
+          "SHAP uid_TransactionAmt_mean: +0.1979 — elevated historical amounts",
+          "SHAP id_30 (Browser/OS anomaly): +0.1811 — device fingerprint mismatch",
+          "Prior Suspicious Flags: 2 — account already flagged twice in recent history",
+          "Countries Transacted: CN, RU, UA — high-risk jurisdictions with sudden geographic diversification",
+          "Failed Login Attempts (30d): 4 — suggests account compromise or credential stuffing",
+          "Last Password Change: 104 days ago — stale credentials increase account takeover risk",
+          "Account Age: 254 days — relatively new account (less than 1 year)",
+          "Circular Fund Flow Detected: TRUE — money laundering red flag indicating potential layering or structuring",
+          "Network Graph: 9 nodes/9 edges with density 0.125 suggesting structured fund movement patterns",
+          "Merchant Risk Score: 0.74 (above 0.70 threshold = high risk)",
+          "Merchant Industry: Crypto Exchange — inherently high-risk for AML/CFT",
+          "Merchant Chargeback Rate: 1.4% — elevated dispute activity",
+          "Merchant Fraud History Flag: YES — documented high_fraud_rate_history",
+          "Merchant Disputes (90d): 14 — significant dispute volume",
+          "Merchant Months on Platform: 75 — established but problematic merchant",
+          "IP Country: BR (Brazil) — but transaction sender_country is US (geolocation anomaly)",
+          "IP Reputation Score: 0.74 — elevated risk",
+          "ISP: AS60068-Datacenter-NL — datacenter IP suggesting VPN/proxy or automated activity",
+          "Sanctions Match: FALSE",
+          "PEP Flag: FALSE",
+          "Adverse Media Hits: 0",
+          "Similar Pattern Match Score: 0.75 — moderate similarity to historical card testing cases"
         ],
         "red_flags": [
-          "ml_score_above_critical_threshold",
-          "elevated_card_linked_addresses",
           "circular_fund_flow",
-          "high_risk_merchant_crypto_exchange",
-          "geographic_diversification_high_risk_jurisdictions",
-          "ip_country_mismatch",
-          "datacenter_isp_suspicious",
-          "stale_password",
+          "elevated_address_count",
+          "account_compromise_signals",
+          "high_risk_merchant",
+          "crypto_exchange_merchant",
+          "merchant_fraud_history",
+          "geographic_anomaly",
+          "datacenter_ip",
           "failed_login_attempts",
+          "stale_credentials",
+          "prior_suspicious_flags",
+          "high_risk_jurisdictions",
           "card_testing_pattern",
-          "high_transaction_velocity"
+          "unusual_transaction_velocity"
         ],
         "regulatory_citations": [
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 8,
-            "excerpt": "FATF 40 Recommendations  \n8 - © 2010 FATF/OECD \nReporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions",
-            "relevance_score": 0.6291
-          },
-          {
-            "source": "fatf_40_recommendations_2012.pdf",
-            "article": null,
             "page": 7,
-            "excerpt": "FATF 40 Recommendations \n© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities:",
-            "relevance_score": 0.6014
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.5942
           },
           {
             "source": "fatf_40_recommendations_2012.pdf",
             "article": null,
-            "page": 22,
-            "excerpt": "FATF 40 Recommendations  \n22 - © 2010 FATF/OECD \nRecommendation 6 \nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \nprominent public functions in their own country. \nRecommendation 9 \nThis Recommendation does not apply to outsourcing or agency relationships. \nThis Recommendation also does not apply to relationships, accounts or transactions between financial \ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \nRecommendations 10 and 11 \nIn relation to insurance business, the word “transactions” should be  understood to refer to the \ninsurance product itself, the premium payment and the benefits. \nRecommendation 13 \n1. The reference to criminal activity in Recommendation 13 refers to: \na)  all criminal acts that would constitute a predicate offence for money la undering in the \njurisdiction; or \nb)  at a minimum to those offences that would constitute a predicate offence as required by \nRecommendation 1.  \nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \nincluding attempted tra nsactions, should be reported regardless of the amount of the \ntransaction. \n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \ntake into account that, in order to deter financial institutions from reporting a suspicious \ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \nmatters. \nRecommendation 14 (tipping off) \nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \ntipping off. \nRecommendation 15 \nThe type and extent of  measures to be taken for each of the requirements set out in the \nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \nfinancing and the size of the business. \nFor financial institutions, compliance management arrangements should include the appointment of a \ncompliance officer at the management level.",
-            "relevance_score": 0.5884
-          },
-          {
-            "source": "fatf_40_recommendations_2012.pdf",
-            "article": null,
-            "page": 19,
-            "excerpt": "FATF 40 Recommendations \n© 2010 FATF/OECD - 19 \nRecommendation 5 \nCustomer due diligence and tipping off \n1. If, during the establishment or course of the customer relationship, or when conducting \noccasional transactions, a financial institution suspects that transactions relate to money \nlaundering or terrorist financing, then the institution should: \na) Normally seek to identify and verify the identity of the customer and the beneficial \nowner, whether permanent or occasional, and irrespective of any exemption or any \ndesignated threshold that might otherwise apply. \nb) Make a STR to the FIU in accordance with Recommendation 13. \n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \nexists that customers could be unintentionally tipped off when the financial institution is \nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \ninvestigate the suspected money laundering or terrorist financing operation.  \n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \nor terrorist financing, they should take into account the risk of tipping off when performing the \ncustomer due diligence process. If the institution reasonably believes that performing the C DD \nprocess will tip -off the customer or potential customer, it may choose not to pursue that \nprocess, and should file an STR. Institutions should ensure that their employees are aware of \nand sensitive to these issues when conducting CDD.  \nCDD for legal persons and arrangements \n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \narrangements, financial institutions should: \na) Verify that any person purporting to act on behalf of the customer is so authorised, and \nidentify that person. \nb) Identify the customer and verify its identity - the types of measures that would be \nnormally needed to satisfactorily perform this function would require obtaining proof of \nincorporation or similar evidence of the legal status of the legal per son or arrangement, \nas well as information concerning the customer’s name, the names of trustees, legal",
-            "relevance_score": 0.5848
-          },
-          {
-            "source": "fatf_40_recommendations_2012.pdf",
-            "article": null,
-            "page": 9,
-            "excerpt": "FATF 40 Recommendations \n© 2010 FATF/OECD - 9 \nOther measures to deter money laundering and terrorist financing \n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \nrequirements. \n18. Countries should not approve the establishment or accept the continued operation of shell \nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \nrelationship with shell banks. Financial institutions should also guard against establishing \nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \nshell banks.  \n19. Countries should consider the feasibility and utility of a system where banks and other financial \ninstitutions and intermediaries would report all domestic and international currency transactions \nabove a fixed a mount, to a national central agency with a computerised data base, available to \ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \nsafeguards to ensure proper use of the information. \n20. Countries should consider applying the FATF Recommendations to businesses and professions, \nother than designated non -financial businesses and professions, that pose a money laundering \nor terrorist financing risk. \n Countries should further encourage the development of modern and  secure techniques of \nmoney management that are less vulnerable to money laundering. \nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \nRecommendations \n21. Financial institutions should give special attention to business relationships and transactions \nwith persons, including companies and financial institutions, from countries which do not or \ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \napparent economic or visible lawful purpose, their background and purpose should, as far as \npossible, be examined, the findings established in writing, and be available to help competent \nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \nRecommendations, countries should be able to apply appropriate countermeasures. \n22. Financial institutions should ensure that the principles applicable to financial institutions, which \nare mentioned above are also applied to branches and majority owned subsidiaries loc ated",
-            "relevance_score": 0.575
+            "page": 8,
+            "excerpt": "Reporting of suspicious transactions and compliance \n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \n(FIU). \n14.* Financial institutions, their directors, officers and employees should be: \na) Protected by legal provisions from criminal and civil liability for breach of any \nrestriction on disclosure of information imposed by contract or by any legislative, \nregulatory or administrative provision, if they report their suspicio ns in good faith to the \nFIU, even if they did not know precisely what the underlying criminal activity was, and \nregardless of whether illegal activity actually occurred. \nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \nrelated information is being reported to the FIU. \n15.* Financial institutions should develop  programmes against money laundering and terrorist \nfinancing.  These programmes should include: \na) The development of internal policies, procedures and contro ls, including appropriate \ncompliance management arrangements, and adequate screening procedures to ensure \nhigh standards when hiring employees. \nb) An ongoing employee training programme. \nc) An audit function to test the system. \n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\nfinancial businesses and professions, subject to the following qualifications: \na) Lawyers, notaries, other independent legal professionals and accountants should be \nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \nin a financial transaction in relation to the activities described in Recommendation 12(d). \nCountries are strongly encouraged to extend the reporting requirement to the rest of the \nprofessional activities of accountants, including auditing.  \nb) Dealers in precious metals and dealers in precious stones should be required to report \nsuspicious transactions when they engage in any cash transaction with a customer equal \nto or above the applicable designated threshold. \nc) Trust and company service providers should be required to report suspicious transactions \nfor a client when, on behalf of or for a client, they engage in a transaction in relation to \nthe activities referred to Recommendation 12(e).",
+            "relevance_score": 0.5899
           }
         ],
-        "reasoning": "This transaction exhibits multiple converging indicators of money laundering and fraud warranting immediate SAR escalation. The XGBoost ML model assigns 0.7329 fraud probability (above critical threshold), driven primarily by elevated card-linked addresses (SHAP +2.1077), indicating potential account compromise or fraud ring coordination. Network analysis confirms circular fund flow—a hallmark of the money laundering layering phase—combined with a high-risk crypto exchange merchant (fraud history, 0.74 risk score) and geographic diversification to FATF-identified high-risk jurisdictions (China, Russia, Ukraine). Behavioral anomalies include 44 transactions in 30 days, prior suspicious flags, stale password (104 days), and 4 failed login attempts, all consistent with compromised account or coordinated fraud activity. Per FATF Recommendations 11 and 13, the combination of unusual transaction patterns with no apparent lawful purpose, high-risk merchant involvement, and suspected money laundering indicators creates a legal obligation to file a SAR with the Turkish FIU (MASAK).</reasoning_summary>\n<parameter name=\"cited_sources\">[\n  \"FATF 40 Recommendations (2012), Recommendation 13, p. 8\",\n  \"FATF 40 Recommendations (2012), Recommendation 11, p. 7\",\n  \"FATF 40 Recommendations (2012), Recommendation 5, p. 19\"\n]",
+        "reasoning": "This transaction meets the SUSPICIOUS threshold with 5+ confirmed red flags and an ML fraud probability of 0.7329 exceeding the critical threshold. The most critical finding is the detected circular fund flow in network analysis, which is a classic money laundering indicator per FATF Recommendation 11, combined with account compromise signals (elevated address count with SHAP +2.1077, prior suspicious flags, failed logins, stale password) and a high-risk merchant (crypto exchange with documented fraud history and 1.4% chargeback rate). Geographic and IP anomalies (US account transacting via Brazil datacenter IP) further corroborate the suspicious pattern. Per FATF Recommendation 13, reasonable grounds to suspect exist that funds may be proceeds of criminal activity or related to layering/structuring, warranting immediate SAR filing and escalation to the Financial Intelligence Unit within 24 hours.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -7737,92 +7827,74 @@ _RAW = r'''
         "customer_info": {
           "account_id": "ACC-74",
           "account_age_days": 254,
-          "account_status": "Active",
-          "kyc_risk_profile": "Elevated",
-          "password_last_changed_days_ago": 104,
+          "account_established": "May 2017",
+          "account_status": "Active; flagged 2 times in recent history",
+          "risk_profile": "HIGH",
+          "kyc_status": "On file",
+          "prior_suspicious_flags": 2,
+          "sender_country": "US",
           "failed_login_attempts_30d": 4,
-          "sanctions_status": "Clean",
-          "ofac_match": false,
-          "eu_match": false,
-          "un_match": false,
-          "pep_flag": false,
-          "adverse_media": false,
-          "sender_country": "United States"
+          "last_password_change_days_ago": 104,
+          "device_fingerprint": "DEV-0 with anomaly flag"
         },
         "transaction_details": {
-          "date_time": "2017-11-01 00:00:00 UTC",
+          "transaction_id": "00000000-0000-0000-0000-000000000045",
+          "date_time_utc": "2017-11-01 00:00:00",
           "transaction_type": "Transfer",
+          "channel": "API",
           "currency": "USD",
           "amount": "Exact amount unavailable",
-          "channel": "API",
           "sender_account": "ACC-74",
+          "sender_country": "US",
           "receiver_merchant": "MERCH-0074",
-          "receiver_merchant_type": "Crypto Exchange",
-          "sender_country": "United States",
-          "receiver_country": "United States",
-          "sender_ip_address": "192.168.74.0",
-          "device_fingerprint": "DEV-0",
-          "day_of_week": "Wednesday",
-          "time_of_day": "Night (00:00 UTC)",
-          "transaction_frequency_30d": 44,
-          "transactions_per_day": 1.5,
-          "prior_suspicious_flags_30d": 2,
-          "ml_fraud_probability": 0.7329,
-          "agent_confidence": 0.88,
-          "card_testing_pattern_match": 0.75,
-          "merchant_risk_score": 0.74,
-          "merchant_chargeback_rate": "1.4%",
-          "merchant_disputes_90d": 14,
-          "ip_reputation_score": 0.74,
-          "circular_flow_nodes": 9,
-          "circular_flow_edges": 9,
-          "geographic_routing": [
-            "China",
-            "Russia",
-            "Ukraine"
-          ],
-          "ip_geolocation_mismatch": "US account with Brazil IP via Netherlands datacenter (AS60068)"
+          "receiver_merchant_industry": "Crypto Exchange",
+          "receiver_country": "US",
+          "timing_night": true,
+          "timing_weekend": false,
+          "ip_geolocation": "Brazil (BR)",
+          "ip_address": "192.168.74.0",
+          "isp": "AS60068-Datacenter-NL",
+          "ip_reputation_score": 0.74
         },
         "suspicious_indicators": [
-          "ML Fraud Probability 0.7329 exceeds critical threshold of ≥0.70",
-          "Elevated address count linked to card (SHAP C1: +2.1077) — strongest indicator of account compromise or fraud ring coordination",
-          "High transaction count linked to card (SHAP C5: +0.3637)",
-          "Unusual gap since last large transaction (SHAP D15: +0.2256)",
-          "Customer transaction history shows elevated amounts (SHAP uid_TransactionAmt_mean: +0.1979)",
-          "Browser or OS anomaly signal (SHAP id_30: +0.1811)",
-          "Transaction Frequency 44 transactions in 30 days (1.5 transactions/day) — elevated velocity",
-          "2 additional suspicious flags in 30-day transaction history",
-          "Circular Fund Flow: 9-node, 9-edge circular flow pattern — classic money laundering layering indicator",
-          "High-Risk Merchant Profile: Crypto Exchange (MERCH-0074) with risk score 0.74",
-          "Merchant Chargeback Rate 1.4% with 14 disputes in 90 days",
-          "Crypto exchanges identified by FATF as high-risk channels for value transfer and AML evasion",
-          "Geographic diversification to FATF high-risk jurisdictions: China, Russia, Ukraine",
-          "IP Geolocation Mismatch: US account with Brazil IP via Netherlands datacenter (AS60068)",
-          "IP Reputation Score 0.74 (elevated risk)",
-          "Failed Login Attempts 4 in 30 days — indicates account access pressure or compromise attempt",
-          "Password Age 104 days exceeds 90-day rotation best practice per BDDK guidelines",
-          "Device Fingerprint DEV-0 with insufficient historical context; potential new device",
-          "Night-time transaction (00:00 UTC) — unusual timing",
-          "Card-Testing Pattern Match 0.75 indicates probing sequence before larger fraud attempts"
+          "ML Fraud Probability 0.7329 exceeds critical threshold of 0.70",
+          "Elevated address count (C1: +2.1077) indicating account takeover or synthetic identity abuse",
+          "High transaction count velocity anomaly (C5: +0.3637)",
+          "Unusual gap since last large transaction (D15: +0.2256)",
+          "Device fingerprint anomaly (id_30: +0.1811) indicating unauthorized access",
+          "Four failed login attempts in 30-day window suggesting credential stuffing or brute-force activity",
+          "Stale credentials with password last changed 104 days ago",
+          "Circular fund flow detected with 9 nodes and 9 edges (density 0.125) - classic money laundering red flag",
+          "Network pattern consistent with layering/structuring of illicit proceeds",
+          "Geographic mismatch: US-based account with transaction from Brazil-based datacenter IP",
+          "Datacenter IP (AS60068-Datacenter-NL) suggests VPN/proxy use or automated transaction activity",
+          "High-risk merchant profile: Crypto Exchange MERCH-0074",
+          "Merchant fraud history flag: YES with documented high fraud rate",
+          "Merchant chargeback rate elevated at 1.4%",
+          "Merchant disputes in 90-day window: 14 incidents",
+          "Merchant risk score 0.74 above 0.70 threshold",
+          "Night-time transaction during non-business hours",
+          "Elevated historical transaction amounts (uid_TransactionAmt_mean: +0.1979)",
+          "Account age 254 days with two prior suspicious flags indicating pattern",
+          "Similar pattern match score 0.75 to historical card testing cases"
         ],
-        "investigation_summary": "Transaction 00000000-0000-0000-0000-000000000045 exhibits multiple converging indicators of money laundering and fraud activity. XGBoost ML model assigns fraud probability of 0.7329, exceeding critical threshold of 0.70. SHAP analysis identifies elevated card-linked addresses (C1: +2.1077) as dominant risk driver. Circular fund flow analysis detected 9-node, 9-edge circular transaction pattern—hallmark of money laundering layering phase. Transaction routed through MERCH-0074, a cryptocurrency exchange with high fraud risk (0.74 risk score, 1.4% chargeback rate, 14 disputes in 90 days). Network analysis reveals transaction routing to China, Russia, and Ukraine—FATF-identified high-risk jurisdictions. Behavioral anomalies include 44 transactions in 30 days (1.5/day), 2 prior suspicious flags, 4 failed login attempts, password unchanged for 104 days, and IP geolocation mismatch (US account, Brazil IP via Netherlands datacenter). Card-testing pattern match of 0.75 suggests probing sequence. Sanctions checks clean (no OFAC/EU/UN matches, no PEP flag). Convergence of ML-detected fraud signals, circular fund flow topology, high-risk merchant involvement, geographic diversification to FATF-identified jurisdictions, and behavioral anomalies creates reasonable suspicion of money laundering and/or fraud activity with no apparent lawful purpose.",
+        "investigation_summary": "Account ACC-74 presents a high-risk profile consistent with account compromise and potential money laundering activity. The transaction to crypto exchange merchant MERCH-0074 on 2017-11-01 triggered a machine learning fraud alert (ML score 0.7329, confidence 0.82) with five or more confirmed red flags. Evidence chain includes: (1) Account takeover signals with strongest SHAP driver (C1: +2.1077) indicating elevated address count linked to account compromise or synthetic identity abuse, corroborated by four failed login attempts in past 30 days and password last changed 104 days ago; (2) Circular fund flow detected with 9 nodes and 9 edges (density 0.125) indicating structured fund movement patterns consistent with money laundering layering/structuring per FATF Recommendation 11; (3) High-risk merchant nexus routing funds to MERCH-0074 crypto exchange with documented fraud history, elevated chargeback rate (1.4%), 14 disputes in past 90 days, and merchant risk score 0.74; (4) Geographic and IP anomalies with US-based account originating from Brazil-based datacenter IP (AS60068-Datacenter-NL) suggesting VPN/proxy use or automated transaction activity; (5) Behavioral anomalies including high transaction count (C5: +0.3637), unusual gap since last large transaction (D15: +0.2256), elevated historical amounts, and device fingerprint anomaly (id_30: +0.1811); (6) Account age of 254 days with two prior suspicious flags indicating pattern of suspicious activity. Reasonable grounds to suspect exist that funds may be proceeds of criminal activity or related to money laundering.",
         "regulatory_triggers": [
-          "FATF Recommendation 13 — Reporting of Suspicious Transactions",
-          "FATF Recommendation 11 — Unusual Transaction Patterns",
-          "FATF Recommendation 5 — Customer Due Diligence",
-          "MASAK Reporting Obligation (Article 4, Law No. 5549)",
-          "BDDK Regulation on AML/CFT Compliance"
+          "FATF Recommendation 11 - Money Laundering & Terrorist Financing Risks (circular fund flow and structured network patterns consistent with layering/structuring)",
+          "FATF Recommendation 13 - Reporting of Suspicious Transactions (reasonable grounds to suspect funds are proceeds of criminal activity)",
+          "MASAK Law No. 4208 Article 4 - Prevention of Laundering Proceeds of Crime (24-hour reporting requirement)",
+          "BDDK Regulation on AML/CFT Compliance - Şüpheli İşlem Bildirimi (ŞİB) filing requirement for suspicious activity thresholds"
         ],
-        "recommended_action": "File Suspicious Activity Report (ŞÜPHELİ İŞLEM BİLDİRİMİ) with MASAK within 10 business days. Conduct Enhanced Due Diligence (EDD) on account ACC-74 including customer contact to verify transaction purpose and merchant relationship, request documentation of business relationship with MERCH-0074, obtain explanation for geographic diversification to China/Russia/Ukraine, and verify IP geolocation mismatch. Investigate 4 failed login attempts and determine if account compromised; initiate password reset and multi-factor authentication if needed. Place temporary hold on outbound transfers pending EDD completion and escalate all future transactions to manual review. Conduct enhanced due diligence on MERCH-0074 and assess whether merchant relationship should be terminated. Expand circular fund flow analysis to identify all counterparties and cross-reference against sanctions lists. Maintain complete audit trail and compliance documentation for regulatory review.",
-        "generated_at": "2026-05-06T20:28:26.666039Z",
+        "recommended_action": "File Suspicious Activity Report (ŞİB) with MASAK within 24 hours per MASAK Article 4. Immediately freeze account ACC-74 pending investigation completion due to account compromise signals and prior suspicious flags. Conduct Enhanced Due Diligence (EDD) on account ACC-74 within 5 business days including identity verification, confirmation of address changes, review of transactions for circular patterns, and assessment of transaction authorization. Escalate MERCH-0074 (crypto exchange) for enhanced monitoring given documented fraud history, elevated chargeback rate, and dispute volume. Force password reset and require multi-factor authentication. Conduct detailed network graph analysis on 9-node circular flow to identify counterparties and trace fund destination. Initiate compliance review of MERCH-0074 relationship and consider transaction monitoring escalation or relationship termination. Maintain audit trail and records per MASAK and BDDK requirements.",
+        "generated_at": "2026-05-06T20:39:55.429073Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22549,
-        "output_tokens": 2455
+        "input_tokens": 21885,
+        "output_tokens": 2000
       }
     },
-    "elapsed_ms": 107063.0000000001
+    "elapsed_ms": 125125.0
   },
   {
     "case": {
@@ -8465,8 +8537,8 @@ _RAW = r'''
     },
     "result": {
       "transaction_id": "00000000-0000-0000-0000-000000000050",
-      "decision_id": "86109f64-a0a9-42ee-b8e7-f934dac26367",
-      "received_at": "2026-05-06T20:29:28.586492Z",
+      "decision_id": "3a78c44a-6b0c-4e29-a0e9-83530bfd3b3b",
+      "received_at": "2026-05-06T20:40:32.270995Z",
       "fraud_probability": 0.7329442501068115,
       "risk_tier": "high",
       "triage_action": "escalate",
@@ -8522,31 +8594,36 @@ _RAW = r'''
           "contribution": 0.1811334639787674
         }
       ],
-      "processing_time_ms": 85038.6405170002,
+      "processing_time_ms": 115244.24085700048,
       "investigation": {
         "decision_hint": "suspicious",
-        "confidence": 0.78,
+        "confidence": 0.82,
         "evidence": [
-          "ML fraud score: 0.7329 with 5 SHAP red flags (elevated address count C1: +2.11, high transaction count C5: +0.36, unusual gap since large transaction D15: +0.23, elevated customer amounts: +0.20, browser/OS anomaly id_30: +0.18)",
-          "Customer ACC-74: 44 transactions in 30 days (avg $124, max $372); 2 prior suspicious flags; account age 254 days; transacted with high-risk jurisdictions (CN, RU, UA); 4 failed logins in 30 days; password unchanged for 104 days",
-          "Merchant MERCH-0074: risk_score 0.74 (HIGH); crypto_exchange category; high_fraud_rate_history flag; 1.4% chargeback rate; 14 disputes in 90 days",
-          "Geolocation mismatch: IP 192.168.74.0 resolves to Brazil (BR) via datacenter ISP (AS60068-NL), not US (sender_country); IP reputation score 0.74 (elevated)",
-          "Adverse media/sanctions: No sanctions match, no PEP flag, no adverse media hits",
-          "Network analysis: 5 nodes, 0 edges; no hub detected, no circular flows",
-          "Similar patterns: Top match score 0.71 with 'card_testing' pattern identified"
+          "Transaction ID: 00000000-0000-0000-0000-000000000050 with ML fraud probability 0.7329",
+          "Merchant MERCH-0074: crypto exchange with risk_score 0.74 (HIGH), high_fraud_rate_history flag, 1.4% chargeback rate, 14 disputes in 90d",
+          "Customer history: 44 transactions in 30d (avg $124 USD, max $372), 2 prior suspicious flags, account age 254 days",
+          "Customer transacted in high-risk jurisdictions (CN, RU, UA) in past 30 days",
+          "4 failed login attempts in 30d, password unchanged for 104 days",
+          "ML SHAP signals: elevated address count (+2.11), high transaction count (+0.36), unusual gap since large transaction (+0.23), elevated customer amounts (+0.20), browser/OS anomaly (+0.18)",
+          "Geolocation mismatch: IP 192.168.74.0 resolves to Brazil (BR), but sender_country is US",
+          "Card testing pattern detected with similarity score 0.71",
+          "Night-time transaction (is_night=true) via API channel (automated/programmatic access)",
+          "Network analysis: 5 nodes, 0 edges, no hub detected, graph density 0"
         ],
         "red_flags": [
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_rate_history",
+          "elevated_chargeback_disputes",
+          "prior_suspicious_flags",
+          "transactions_high_risk_jurisdictions",
+          "failed_login_attempts",
+          "stale_password",
+          "card_testing_pattern",
+          "geolocation_mismatch",
           "elevated_address_count",
           "high_transaction_count",
-          "prior_suspicious_flags",
-          "high_risk_jurisdiction_transactions",
-          "account_security_concerns",
-          "merchant_high_fraud_rate",
-          "merchant_crypto_exchange",
-          "elevated_chargeback_disputes",
-          "geolocation_mismatch",
-          "elevated_ip_reputation",
-          "card_testing_pattern"
+          "automated_api_access",
+          "night_time_transaction"
         ],
         "tools_called": [
           "get_customer_history",
@@ -8557,7 +8634,7 @@ _RAW = r'''
           "regulatory_policy_rag",
           "find_similar_patterns"
         ],
-        "reasoning_summary": "Transaction 00000000-0000-0000-0000-000000000050 exhibits multiple independent red flags warranting SAR filing. The ML model assigned a 0.7329 fraud probability driven by 5 distinct SHAP features (address/transaction count anomalies, customer behavioral patterns), combined with high-risk merchant profile (crypto exchange with 0.74 risk score and documented fraud history), customer behavioral anomalies (2 prior suspicious flags, transactions with CN/RU/UA, account security concerns), and geolocation inconsistency (Brazil IP vs. US sender_country). Per FATF Recommendation 13, the combination of merchant risk, customer behavioral anomalies, and geolocation inconsistencies creates reasonable grounds for suspicion of criminal activity or terrorist financing. The institution should file a SAR immediately with enhanced documentation.",
+        "reasoning_summary": "This transaction exhibits multiple converging fraud signals warranting SAR escalation. The ML model assigns 0.7329 fraud probability with five confirmed SHAP drivers, most notably elevated address count (+2.11), combined with a high-risk crypto-exchange merchant (risk_score 0.74) with documented fraud history and elevated chargebacks. Customer behavioral anomalies include 2 prior suspicious flags, transactions to FATF non-compliant jurisdictions (China, Russia, Ukraine), 4 failed logins in 30 days, and a 104-day stale password. A card-testing pattern (score 0.71) is detected, consistent with account enumeration behavior. Geolocation mismatch (Brazil IP vs. US sender) suggests potential account compromise or proxy access. Per FATF Recommendation 11 and 5, the combination of unusual transaction patterns with no apparent lawful purpose and the convergence of merchant risk, customer behavioral anomalies, and ML signals mandate STR filing under Turkish AML/CFT regulations.",
         "tool_trace": [
           {
             "tool": "get_customer_history",
@@ -8602,7 +8679,7 @@ _RAW = r'''
             "args": {
               "query": "FATF and MASAK requirements for high-risk transactions involving crypto exchanges and elevated address/transaction count anomalies"
             },
-            "result": "{\"query\": \"FATF and MASAK requirements for high-risk transactions involving crypto exchanges and elevated address/transaction count anomalies\", \"excerpts\": [{\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities:\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.6096}, {\"text\": \"FATF 40 Recommendations  \\n18 - © 2010 FATF/OECD \\n \\nINTERPRETATIVE NOTES \\nGeneral \\n1.  Reference in this document to “countries” should be taken to apply equally to “territories” or \\n“jurisdictions”. \\n2.  Recommendations 5-16 and 21 -22 state that financial institutions or designated non -financial \\nbusinesses and professions should take certain actions. These references require countries to \\ntake measures that will oblige financial institutions or designated non -financial businesses and \\nprofessions to  comply with each Recommendation. The basic obligations under \\nRecommendations 5, 10 and 13 should be set out in law or regulation, while more detailed \\nelements in those Recommendations, as well as obligations under other Recommendations,  \\ncould be required either by law or regulation or by other enforceable means issued by a \\ncompetent authority.    \\n3.  Where reference is made to a financial institution being satisfied as to a matter, that institution \\nmust be able to justify its assessment to competent authorities. \\n4.  To comply with Recommendations 12 and 16, countries do not need to issue laws or \\nregulations that relate exclusively to lawyers, notaries, accountants and the other designated \\nnon-financial businesses and professions so long as these businesses or professions are included \\nin laws or regulations covering the underlying activities.  \\n5. The Interpretative Notes that apply to financial institutions are also relevant to designated non -\\nfinancial businesses and professions, where applicable.  \\nRecommendations 5, 12 and 16 \\nThe designated thresholds for transactions (under Recommendations 5 and 12) are as follows: \\n Financial institutions (for occasional customers under Recommendation 5) - \\nUSD/EUR 15 000.  \\n Casinos, including internet casinos (under Recommendation 12) - USD/EUR 3 000  \\n For dealers in precious metals and dealers in precious stones when engaged in any cash \\ntransaction (under Recommendations 12 and 16) - USD/EUR 15 000.   \\nFinancial transactions above a designated threshold include situati ons where the transaction is carried \\nout in a single operation or in several operations that appear to be linked.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.18\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 18, \"relevance_score\": 0.5791}, {\"text\": \"FATF 40 Recommendations  \\n8 - © 2010 FATF/OECD \\nReporting of suspicious transactions and compliance \\n13.* If a financial institution suspects or has reasonable grounds to suspect that funds are the \\nproceeds of a criminal activity, or are related to terrorist financing, it should be required, \\ndirectly by law or regulation, to report promptly its suspicions to the financial intelligence unit \\n(FIU). \\n14.* Financial institutions, their directors, officers and employees should be: \\na) Protected by legal provisions from criminal and civil liability for breach of any \\nrestriction on disclosure of information imposed by contract or by any legislative, \\nregulatory or administrative provision, if they report their suspicio ns in good faith to the \\nFIU, even if they did not know precisely what the underlying criminal activity was, and \\nregardless of whether illegal activity actually occurred. \\nb) Prohibited by law from disclosing the fact that a suspicious transaction report (STR) or \\nrelated information is being reported to the FIU. \\n15.* Financial institutions should develop  programmes against money laundering and terrorist \\nfinancing.  These programmes should include: \\na) The development of internal policies, procedures and contro ls, including appropriate \\ncompliance management arrangements, and adequate screening procedures to ensure \\nhigh standards when hiring employees. \\nb) An ongoing employee training programme. \\nc) An audit function to test the system. \\n16.* The requirements set out in R ecommendations 13 to 15, and 21 apply to all designated non -\\nfinancial businesses and professions, subject to the following qualifications: \\na) Lawyers, notaries, other independent legal professionals and accountants should be \\nrequired to report suspicious tran sactions when, on behalf of or for a client, they engage \\nin a financial transaction in relation to the activities described in Recommendation 12(d). \\nCountries are strongly encouraged to extend the reporting requirement to the rest of the \\nprofessional activities of accountants, including auditing.  \\nb) Dealers in precious metals and dealers in precious stones should be required to report \\nsuspicious transactions when they engage in any cash transaction with a customer equal \\nto or above the applicable designated threshold. \\nc) Trust and company service providers should be required to report suspicious transactions\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.8\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 8, \"relevance_score\": 0.5765}, {\"text\": \"FATF 40 Recommendations  \\n22 - © 2010 FATF/OECD \\nRecommendation 6 \\nCountries are encouraged to extend the requirements of Recommendation 6 to individuals who hold \\nprominent public functions in their own country. \\nRecommendation 9 \\nThis Recommendation does not apply to outsourcing or agency relationships. \\nThis Recommendation also does not apply to relationships, accounts or transactions between financial \\ninstitutions for their clients. Those relationships are addressed by Recommendations 5 and 7. \\nRecommendations 10 and 11 \\nIn relation to insurance business, the word “transactions” should be  understood to refer to the \\ninsurance product itself, the premium payment and the benefits. \\nRecommendation 13 \\n1. The reference to criminal activity in Recommendation 13 refers to: \\na)  all criminal acts that would constitute a predicate offence for money la undering in the \\njurisdiction; or \\nb)  at a minimum to those offences that would constitute a predicate offence as required by \\nRecommendation 1.  \\nCountries are strongly encouraged to adopt alternative (a). All suspicious transactions, \\nincluding attempted tra nsactions, should be reported regardless of the amount of the \\ntransaction. \\n2. In implementing Recommendation 13, suspicious transactions should be reported by financial \\ninstitutions regardless of whether they are also thought to involve tax matters.  Countries should \\ntake into account that, in order to deter financial institutions from reporting a suspicious \\ntransaction, money launderers may seek  to state inter alia that their transactions relate to tax \\nmatters. \\nRecommendation 14 (tipping off) \\nWhere lawyers, notaries, other independent legal professionals and accountants acting as independent \\nlegal professionals seek to dissuade a client from engaging in illegal activity, this does not amount to \\ntipping off. \\nRecommendation 15 \\nThe type and extent of  measures to be taken for each of the requirements set out in the \\nRecommendation should be appropriate having regard to the risk of money laundering and terrorist \\nfinancing and the size of the business. \\nFor financial institutions, compliance management arrangements should include the appointment of a \\ncompliance officer at the management level.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.22\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 22, \"relevance_score\": 0.5657}, {\"text\": \"FATF 40 Recommendations \\n© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.5599}]}"
+            "result": "{\"query\": \"FATF and MASAK requirements for high-risk transactions involving crypto exchanges and elevated address/transaction count anomalies\", \"excerpts\": [{\"text\": \"© 2010 FATF/OECD - 7 \\nIt is left to each country to determine in which countries the third party that meets the \\nconditions can be based, having regard to information available on countries that do not or do \\nnot adequately apply the FATF Recommendations.  \\n10.* Financial institutions should maintain, for at least five years, all necessary records on \\ntransactions, both domestic or international, to enable them to comply swiftly with information \\nrequests from the competent authorities.  Such records must b e sufficient to permit \\nreconstruction of individual transactions (including the amounts and types of currency involved \\nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \\n Financial institutions should keep records on the  identification data obtained through the \\ncustomer due diligence process (e.g. copies or records of official identification documents like \\npassports, identity cards, driving licenses or similar documents), account files and business \\ncorrespondence for at least five years after the business relationship is ended. \\n The identification data and transaction records should be available to domestic competent \\nauthorities upon appropriate authority. \\n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \\nand all unusual patterns of transactions, which have no apparent economic or visible lawful \\npurpose.  The background and purpose of such transactions should, as far as possible, be \\nexamined, the findings established in wri ting, and be available to help competent authorities \\nand auditors. \\n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \\nand 8 to 11 apply to designated non -financial businesses and professions in the following \\nsituations: \\na) Casinos – when custo mers engage in financial transactions equal to or above the \\napplicable designated threshold. \\nb) Real estate agents - when they are involved in transactions for their client concerning the \\nbuying and selling of real estate. \\nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \\ntransaction with a customer equal to or above the applicable designated threshold. \\nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \\nprepare for or carry out transactions for their client concerning the following activities: \\n buying and selling of real estate;\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.7\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 7, \"relevance_score\": 0.5884}, {\"text\": \"© 2010 FATF/OECD - 9 \\nOther measures to deter money laundering and terrorist financing \\n17. Countries should ensure that effective, proportionate and dissuasive sanctions, whether \\ncriminal, civil or administrative, are available to deal with natural o r legal persons covered by \\nthese Recommendations that fail to comply with anti -money laundering or terrorist financing \\nrequirements. \\n18. Countries should not approve the establishment or accept the continued operation of shell \\nbanks. Financial institutions should refuse to enter into, or continue, a correspondent banking \\nrelationship with shell banks. Financial institutions should also guard against establishing \\nrelations with respondent foreign financial institutions that permit th eir accounts to be used by \\nshell banks.  \\n19. Countries should consider the feasibility and utility of a system where banks and other financial \\ninstitutions and intermediaries would report all domestic and international currency transactions \\nabove a fixed a mount, to a national central agency with a computerised data base, available to \\ncompetent authorities for use in money laundering or terrorist financing cases, subject to strict \\nsafeguards to ensure proper use of the information. \\n20. Countries should consider applying the FATF Recommendations to businesses and professions, \\nother than designated non -financial businesses and professions, that pose a money laundering \\nor terrorist financing risk. \\n Countries should further encourage the development of modern and  secure techniques of \\nmoney management that are less vulnerable to money laundering. \\nMeasures to be taken with respect to countries that do not or insufficiently comply with the FATF \\nRecommendations \\n21. Financial institutions should give special attention to business relationships and transactions \\nwith persons, including companies and financial institutions, from countries which do not or \\ninsufficiently apply the FATF Recommendations.  Whenever these transactions have no \\napparent economic or visible lawful purpose, their background and purpose should, as far as \\npossible, be examined, the findings established in writing, and be available to help competent \\nauthorities. Where such a  country continues not to apply or insufficiently applies the FATF \\nRecommendations, countries should be able to apply appropriate countermeasures. \\n22. Financial institutions should ensure that the principles applicable to financial institutions, which \\nare mentioned above are also applied to branches and majority owned subsidiaries loc ated\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.9\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 9, \"relevance_score\": 0.549}, {\"text\": \"FINANCIAL BUSINESSES AND PROFESSIONS TO PREVENT MONEY \\nLAUNDERING AND TERRORIST FINANCING \\n4. Countries should ensure that financial institution secrecy laws do not inhibit implementation of \\nthe FATF Recommendations.  \\nCustomer due diligence and record-keeping  \\n5.* Financial institutions should not keep anonymous  accounts or accounts in obviously fictitious \\nnames. \\n Financial institutions should undertake customer due diligence measures, including identifying \\nand verifying the identity of their customers, when: \\n establishing business relations; \\n carrying out occasional transactions: (i) above the applicable designated threshold ; or (ii) \\nthat are  wire transfers in the circumstances covered by the Interpretative Note to Special \\nRecommendation VII; \\n there is a suspicion of money laundering or terrorist financing; or \\n the financial institution has doubts about the veracity or adequacy of previously obtained \\ncustomer identification data.\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.4\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 4, \"relevance_score\": 0.5386}, {\"text\": \"© 2010 FATF/OECD - 19 \\nRecommendation 5 \\nCustomer due diligence and tipping off \\n1. If, during the establishment or course of the customer relationship, or when conducting \\noccasional transactions, a financial institution suspects that transactions relate to money \\nlaundering or terrorist financing, then the institution should: \\na) Normally seek to identify and verify the identity of the customer and the beneficial \\nowner, whether permanent or occasional, and irrespective of any exemption or any \\ndesignated threshold that might otherwise apply. \\nb) Make a STR to the FIU in accordance with Recommendation 13. \\n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \\nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \\nexists that customers could be unintentionally tipped off when the financial institution is \\nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \\ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \\ninvestigate the suspected money laundering or terrorist financing operation.  \\n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \\nor terrorist financing, they should take into account the risk of tipping off when performing the \\ncustomer due diligence process. If the institution reasonably believes that performing the C DD \\nprocess will tip -off the customer or potential customer, it may choose not to pursue that \\nprocess, and should file an STR. Institutions should ensure that their employees are aware of \\nand sensitive to these issues when conducting CDD.  \\nCDD for legal persons and arrangements \\n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \\narrangements, financial institutions should: \\na) Verify that any person purporting to act on behalf of the customer is so authorised, and \\nidentify that person. \\nb) Identify the customer and verify its identity - the types of measures that would be \\nnormally needed to satisfactorily perform this function would require obtaining proof of \\nincorporation or similar evidence of the legal status of the legal per son or arrangement, \\nas well as information concerning the customer’s name, the names of trustees, legal\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.19\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 19, \"relevance_score\": 0.5206}, {\"text\": \"© 2010 FATF/OECD - 15 \\nGLOSSARY \\n \\nIn these Recommendations the following abbreviations and references are used: \\n“Beneficial owner” refers to the natural person(s) who ultimately owns or controls a customer and/or \\nthe person on whose behalf a transaction is being conducted. It also incorporates those persons who \\nexercise ultimate effective control over a legal person or arrangement.   \\n“Core Principles” refers to the Core Principles for Effective Banking Supervision issued by the Basel \\nCommittee on Banking Supervision, the Objectives and Principles for Securities Regulation issued by \\nthe International Organization of Securities Commissions, and the Insurance Supervisory Principles \\nissued by the International Association of Insurance Supervisors. \\n“Designated categories of offences” means: \\n participation in an organised criminal group and racketeering; \\n terrorism, including terrorist financing; \\n trafficking in human beings and migrant smuggling; \\n sexual exploitation, including sexual exploitation of children; \\n illicit trafficking in narcotic drugs and psychotropic substances; \\n illicit arms trafficking; \\n illicit trafficking in stolen and other goods; \\n corruption and bribery; \\n fraud; \\n counterfeiting currency; \\n counterfeiting and piracy of products; \\n environmental crime; \\n murder, grievous bodily injury; \\n kidnapping, illegal restraint and hostage-taking; \\n robbery or theft; \\n smuggling;  \\n extortion; \\n forgery; \\n piracy; and \\n insider trading and market manipulation.  \\nWhen deciding on the range of offences to be covered as predicate offences under each of the \\ncategories listed above, each country may decide, in accordance with its domestic law, how it will \\ndefine those offences and the nature of any particular elements of those offences that make them \\nserious offences. \\n “Designated non-financial businesses and professions” means: \\na) Casinos (which also includes internet casinos).\", \"citation\": \"fatf_40_recommendations_2012.pdf, p.15\", \"source\": \"fatf_40_recommendations_2012.pdf\", \"page\": 15, \"relevance_score\": 0.52}]}"
           },
           {
             "tool": "find_similar_patterns",
@@ -8614,41 +8691,61 @@ _RAW = r'''
           }
         ],
         "cited_sources": [
-          "FATF 40 Recommendations (2012), p. 8, Recommendation 13",
-          "FATF Recommendation 11, p. 7"
+          "fatf_40_recommendations_2012.pdf, p.7",
+          "fatf_40_recommendations_2012.pdf, p.19"
         ]
       },
       "fraud_decision": {
         "transaction_id": "00000000-0000-0000-0000-000000000050",
         "outcome": "escalate",
-        "confidence": 0.78,
+        "confidence": 0.82,
         "ml_score": 0.7329442501068115,
         "agent_used": "critical",
         "decision_hint": "suspicious",
         "evidence": [
-          "ML fraud score: 0.7329 with 5 SHAP red flags (elevated address count C1: +2.11, high transaction count C5: +0.36, unusual gap since large transaction D15: +0.23, elevated customer amounts: +0.20, browser/OS anomaly id_30: +0.18)",
-          "Customer ACC-74: 44 transactions in 30 days (avg $124, max $372); 2 prior suspicious flags; account age 254 days; transacted with high-risk jurisdictions (CN, RU, UA); 4 failed logins in 30 days; password unchanged for 104 days",
-          "Merchant MERCH-0074: risk_score 0.74 (HIGH); crypto_exchange category; high_fraud_rate_history flag; 1.4% chargeback rate; 14 disputes in 90 days",
-          "Geolocation mismatch: IP 192.168.74.0 resolves to Brazil (BR) via datacenter ISP (AS60068-NL), not US (sender_country); IP reputation score 0.74 (elevated)",
-          "Adverse media/sanctions: No sanctions match, no PEP flag, no adverse media hits",
-          "Network analysis: 5 nodes, 0 edges; no hub detected, no circular flows",
-          "Similar patterns: Top match score 0.71 with 'card_testing' pattern identified"
+          "Transaction ID: 00000000-0000-0000-0000-000000000050 with ML fraud probability 0.7329",
+          "Merchant MERCH-0074: crypto exchange with risk_score 0.74 (HIGH), high_fraud_rate_history flag, 1.4% chargeback rate, 14 disputes in 90d",
+          "Customer history: 44 transactions in 30d (avg $124 USD, max $372), 2 prior suspicious flags, account age 254 days",
+          "Customer transacted in high-risk jurisdictions (CN, RU, UA) in past 30 days",
+          "4 failed login attempts in 30d, password unchanged for 104 days",
+          "ML SHAP signals: elevated address count (+2.11), high transaction count (+0.36), unusual gap since large transaction (+0.23), elevated customer amounts (+0.20), browser/OS anomaly (+0.18)",
+          "Geolocation mismatch: IP 192.168.74.0 resolves to Brazil (BR), but sender_country is US",
+          "Card testing pattern detected with similarity score 0.71",
+          "Night-time transaction (is_night=true) via API channel (automated/programmatic access)",
+          "Network analysis: 5 nodes, 0 edges, no hub detected, graph density 0"
         ],
         "red_flags": [
+          "high_risk_merchant_crypto_exchange",
+          "merchant_fraud_rate_history",
+          "elevated_chargeback_disputes",
+          "prior_suspicious_flags",
+          "transactions_high_risk_jurisdictions",
+          "failed_login_attempts",
+          "stale_password",
+          "card_testing_pattern",
+          "geolocation_mismatch",
           "elevated_address_count",
           "high_transaction_count",
-          "prior_suspicious_flags",
-          "high_risk_jurisdiction_transactions",
-          "account_security_concerns",
-          "merchant_high_fraud_rate",
-          "merchant_crypto_exchange",
-          "elevated_chargeback_disputes",
-          "geolocation_mismatch",
-          "elevated_ip_reputation",
-          "card_testing_pattern"
+          "automated_api_access",
+          "night_time_transaction"
         ],
-        "regulatory_citations": [],
-        "reasoning": "Transaction 00000000-0000-0000-0000-000000000050 exhibits multiple independent red flags warranting SAR filing. The ML model assigned a 0.7329 fraud probability driven by 5 distinct SHAP features (address/transaction count anomalies, customer behavioral patterns), combined with high-risk merchant profile (crypto exchange with 0.74 risk score and documented fraud history), customer behavioral anomalies (2 prior suspicious flags, transactions with CN/RU/UA, account security concerns), and geolocation inconsistency (Brazil IP vs. US sender_country). Per FATF Recommendation 13, the combination of merchant risk, customer behavioral anomalies, and geolocation inconsistencies creates reasonable grounds for suspicion of criminal activity or terrorist financing. The institution should file a SAR immediately with enhanced documentation.",
+        "regulatory_citations": [
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 7,
+            "excerpt": "© 2010 FATF/OECD - 7 \nIt is left to each country to determine in which countries the third party that meets the \nconditions can be based, having regard to information available on countries that do not or do \nnot adequately apply the FATF Recommendations.  \n10.* Financial institutions should maintain, for at least five years, all necessary records on \ntransactions, both domestic or international, to enable them to comply swiftly with information \nrequests from the competent authorities.  Such records must b e sufficient to permit \nreconstruction of individual transactions (including the amounts and types of currency involved \nif any) so as to provide, if necessary, evidence for prosecution of criminal activity. \n Financial institutions should keep records on the  identification data obtained through the \ncustomer due diligence process (e.g. copies or records of official identification documents like \npassports, identity cards, driving licenses or similar documents), account files and business \ncorrespondence for at least five years after the business relationship is ended. \n The identification data and transaction records should be available to domestic competent \nauthorities upon appropriate authority. \n11.* Financial institutions should pay special attention to all com plex, unusual large transactions, \nand all unusual patterns of transactions, which have no apparent economic or visible lawful \npurpose.  The background and purpose of such transactions should, as far as possible, be \nexamined, the findings established in wri ting, and be available to help competent authorities \nand auditors. \n12.* The customer due diligence and record-keeping requirements set out in Recommendations 5, 6, \nand 8 to 11 apply to designated non -financial businesses and professions in the following \nsituations: \na) Casinos – when custo mers engage in financial transactions equal to or above the \napplicable designated threshold. \nb) Real estate agents - when they are involved in transactions for their client concerning the \nbuying and selling of real estate. \nc) Dealers in precious metals and dealers in precious stones - when they engage in any cash \ntransaction with a customer equal to or above the applicable designated threshold. \nd) Lawyers, notaries, other independent legal professionals and accountants whe n they \nprepare for or carry out transactions for their client concerning the following activities: \n buying and selling of real estate;",
+            "relevance_score": 0.5884
+          },
+          {
+            "source": "fatf_40_recommendations_2012.pdf",
+            "article": null,
+            "page": 19,
+            "excerpt": "© 2010 FATF/OECD - 19 \nRecommendation 5 \nCustomer due diligence and tipping off \n1. If, during the establishment or course of the customer relationship, or when conducting \noccasional transactions, a financial institution suspects that transactions relate to money \nlaundering or terrorist financing, then the institution should: \na) Normally seek to identify and verify the identity of the customer and the beneficial \nowner, whether permanent or occasional, and irrespective of any exemption or any \ndesignated threshold that might otherwise apply. \nb) Make a STR to the FIU in accordance with Recommendation 13. \n2. Recommendation 14 prohibits financial institutions, their directors , officers and employees \nfrom disclosing the fact that an STR or related information is being reported to the FIU.  A risk \nexists that customers could be unintentionally tipped off when the financial institution is \nseeking to perform its customer due dilig ence (CDD) obligations in these circumstances. The \ncustomer’s awareness of a possible STR or investigation could compromise future efforts to \ninvestigate the suspected money laundering or terrorist financing operation.  \n3. Therefore, if financial institutions form a suspicion that transactions relate to money laundering \nor terrorist financing, they should take into account the risk of tipping off when performing the \ncustomer due diligence process. If the institution reasonably believes that performing the C DD \nprocess will tip -off the customer or potential customer, it may choose not to pursue that \nprocess, and should file an STR. Institutions should ensure that their employees are aware of \nand sensitive to these issues when conducting CDD.  \nCDD for legal persons and arrangements \n4. When performing elements (a) and (b) of the CDD process in relation to legal persons or \narrangements, financial institutions should: \na) Verify that any person purporting to act on behalf of the customer is so authorised, and \nidentify that person. \nb) Identify the customer and verify its identity - the types of measures that would be \nnormally needed to satisfactorily perform this function would require obtaining proof of \nincorporation or similar evidence of the legal status of the legal per son or arrangement, \nas well as information concerning the customer’s name, the names of trustees, legal",
+            "relevance_score": 0.5206
+          }
+        ],
+        "reasoning": "This transaction exhibits multiple converging fraud signals warranting SAR escalation. The ML model assigns 0.7329 fraud probability with five confirmed SHAP drivers, most notably elevated address count (+2.11), combined with a high-risk crypto-exchange merchant (risk_score 0.74) with documented fraud history and elevated chargebacks. Customer behavioral anomalies include 2 prior suspicious flags, transactions to FATF non-compliant jurisdictions (China, Russia, Ukraine), 4 failed logins in 30 days, and a 104-day stale password. A card-testing pattern (score 0.71) is detected, consistent with account enumeration behavior. Geolocation mismatch (Brazil IP vs. US sender) suggests potential account compromise or proxy access. Per FATF Recommendation 11 and 5, the combination of unusual transaction patterns with no apparent lawful purpose and the convergence of merchant risk, customer behavioral anomalies, and ML signals mandate STR filing under Turkish AML/CFT regulations.",
         "tools_called": [
           "get_customer_history",
           "adverse_media_search",
@@ -8664,70 +8761,71 @@ _RAW = r'''
         "customer_info": {
           "account_id": "ACC-74",
           "account_age_days": 254,
-          "customer_risk_profile": "ELEVATED",
-          "kyc_status": "On file",
-          "prior_compliance_flags": 2,
-          "account_security_posture": "WEAK",
-          "failed_login_attempts_30d": 4,
+          "kyc_status": "Active",
+          "prior_suspicious_flags": 2,
+          "risk_profile": "ELEVATED",
+          "jurisdiction": "United States",
           "password_age_days": 104,
-          "sender_country_declared": "United States (US)"
+          "failed_login_attempts_30d": 4
         },
         "transaction_details": {
-          "transaction_type": "Fund Transfer",
+          "transaction_id": "00000000-0000-0000-0000-000000000050",
+          "date_time_utc": "2017-11-01T00:00:00Z",
+          "transaction_type": "Transfer",
           "channel": "API",
           "currency": "USD",
-          "customer_30day_average": "$124 USD",
-          "customer_30day_maximum": "$372 USD",
+          "amount_status": "Exact amount unavailable",
+          "customer_30day_average": 124,
+          "customer_30day_max": 372,
           "sender_account": "ACC-74",
-          "receiver_merchant": "MERCH-0074",
-          "receiver_country": "United States (US)",
-          "originating_ip_address": "192.168.74.0",
-          "ip_geolocation": "Brazil (BR)",
-          "ip_reputation_score": 0.74,
+          "merchant_counterparty": "MERCH-0074",
+          "merchant_type": "Cryptocurrency Exchange",
+          "sender_ip_address": "192.168.74.0",
+          "ip_geolocation": "Brazil",
           "device_fingerprint": "DEV-0",
-          "timestamp_utc": "2017-11-01T00:00:00+00:00",
-          "transaction_velocity_30d": "44 transactions in 30 days (1.47 transactions/day)",
-          "ml_fraud_score": 0.7329,
-          "ml_model_confidence": 0.78,
-          "pattern_match_score": 0.71,
-          "pattern_identified": "Card testing"
+          "weekday": "Wednesday"
         },
         "suspicious_indicators": [
-          "ML Fraud Score 0.7329 (73.29% probability of fraudulent activity) exceeds institutional threshold",
-          "Elevated Address Count (SHAP +2.11): Multiple addresses linked to card indicate potential account compromise or structuring",
-          "High Transaction Count (SHAP +0.36): 44 transactions in 30 days represents elevated velocity inconsistent with customer baseline",
-          "Unusual Gap Since Last Large Transaction (SHAP +0.23): Temporal pattern deviation suggests behavioral shift",
-          "Elevated Customer Amounts (SHAP +0.20): Transaction amounts exceed historical customer norms",
-          "Browser/OS Anomaly (SHAP +0.18): Device fingerprint inconsistency detected",
-          "Transaction Velocity: 44 transactions in 30 days (1.47 transactions/day) significantly elevated",
-          "Prior Suspicious Activity: 2 documented suspicious flags on account history",
-          "High-Risk Jurisdiction Exposure: Customer transacted with China (CN), Russia (RU), and Ukraine (UA)",
-          "Account Security Compromise: 4 failed login attempts in 30 days; password unchanged for 104 days",
-          "Merchant Risk Score 0.74 (HIGH): Cryptocurrency exchange with documented fraud history",
-          "Elevated Chargeback Rate: 1.4% (industry standard <0.5%)",
-          "High Dispute Count: 14 disputes in 90 days (0.16 disputes/day)",
-          "Geolocation Mismatch: Declared US sender but IP resolves to Brazil via datacenter ISP",
-          "IP Reputation Score 0.74 (elevated risk): Datacenter/proxy ISP classification",
-          "Pattern Matching Score 0.71: High similarity to card testing patterns (precursor to larger fraudulent activity)",
-          "Cryptocurrency Exchange Classification: DNFBP designated high-risk entity under FATF Recommendation 15"
+          "High-risk merchant category (Cryptocurrency Exchange) with risk score 0.74",
+          "Merchant fraud history documented with 1.4% chargeback rate and 14 disputes in 90-day window",
+          "Machine learning fraud probability 0.7329 (73.29%) with high confidence 0.82",
+          "Elevated address count linked to card (SHAP +2.11) - primary signal indicating card testing/enumeration",
+          "High transaction velocity: 44 transactions in 30 days (1.47 per day average)",
+          "Two prior suspicious activity flags on customer record",
+          "Customer transactions in high-risk jurisdictions: China, Russia, Ukraine within past 30 days",
+          "Four failed login attempts in past 30 days indicating potential account compromise",
+          "Stale credential: password unchanged for 104 days",
+          "Card testing pattern detected with similarity score 0.71 consistent with probing behavior",
+          "Geolocation mismatch: IP address 192.168.74.0 (Brazil) does not match sender_country (United States) - suggests proxy/VPN use or account compromise",
+          "Automated/programmatic access via API channel during night-time hours (00:00 UTC) consistent with bot-driven fraud",
+          "Isolated transaction with no legitimate business relationship clustering (5 network nodes, 0 edges, graph density 0)",
+          "High transaction count linked to card (SHAP +0.36)",
+          "Unusual gap since last large transaction (SHAP +0.23)",
+          "Elevated customer transaction amounts (SHAP +0.20)",
+          "Browser/OS anomaly detected (SHAP +0.18)"
         ],
-        "investigation_summary": "Transaction 00000000-0000-0000-0000-000000000050 presents a convergence of independent, corroborating red flags that collectively establish reasonable grounds for suspicion of money laundering, fraud, or terrorist financing. The machine learning model assigned a 0.7329 fraud probability, driven by five distinct SHAP features reflecting behavioral anomalies (elevated address/transaction counts, customer amount elevation, device anomalies, and temporal gaps). Account ACC-74 exhibits a sharp departure from baseline behavior: 44 transactions in 30 days (1.47/day) versus historical customer average of $124 USD per transaction, with 2 prior suspicious flags and weak account security posture (4 failed logins, 104-day password age). The customer has transacted with China, Russia, and Ukraine—jurisdictions designated as elevated AML/CFT risk by FATF. MERCH-0074 is classified as a cryptocurrency exchange with a 0.74 risk score, documented fraud history, and elevated chargeback/dispute metrics (1.4% chargeback rate, 14 disputes in 90 days). The transaction originated from an IP address (192.168.74.0) that resolves to Brazil via a datacenter ISP, contradicting the declared US sender country, consistent with account compromise, VPN/proxy use for layering, or sanctions evasion. The transaction exhibits a 0.71 similarity score to documented \"card testing\" patterns, suggesting potential precursor activity to larger fraudulent transactions or account takeover. The combination of elevated ML fraud probability, customer behavioral anomalies, high-risk merchant profile, high-risk jurisdiction exposure, and geolocation inconsistency creates a reasonable basis for suspicion that this transaction may involve money laundering, fraud, or terrorist financing.",
+        "investigation_summary": "Transaction 00000000-0000-0000-0000-000000000050 exhibits a convergence of fraud indicators across merchant risk, customer behavior, machine learning signals, and account security domains. The transaction routes funds from account ACC-74 to cryptocurrency exchange MERCH-0074, a high-risk merchant (risk_score 0.74) with documented fraud history, elevated chargeback rates (1.4%), and 14 disputes in the past 90 days. The customer account shows elevated risk: two prior suspicious activity flags, 44 transactions in 30 days (high velocity), and recent activity in FATF non-compliant jurisdictions (China, Russia, Ukraine). Account security is compromised: four failed login attempts in 30 days and a 104-day-old password suggest either weak credential management or unauthorized access attempts. The machine learning model assigns 0.7329 fraud probability with high confidence (0.82). The dominant SHAP signal—elevated address count (+2.11)—indicates multiple addresses linked to this card, a classic indicator of account enumeration or card testing. The transaction occurs at night (00:00 UTC) via API channel (automated/programmatic access), and the originating IP address (192.168.74.0, Brazil) does not match the declared sender country (United States). This geolocation mismatch, combined with the card-testing pattern (similarity 0.71), suggests either account compromise via proxy/VPN or deliberate obfuscation of transaction origin. Network analysis reveals no legitimate business relationship clustering (5 isolated nodes, 0 edges, density 0), indicating this transaction lacks contextual legitimacy within the customer's transaction graph. The convergence of high-risk merchant, customer behavioral anomalies, machine learning signals, account security weaknesses, and operational red flags creates a compelling case for suspicious activity with no apparent lawful purpose.",
         "regulatory_triggers": [
-          "FATF Recommendation 13 (Reporting of Suspicious Transactions)",
-          "FATF Recommendation 15 (DNFBP Oversight - Cryptocurrency Exchanges)",
-          "MASAK Law (Law No. 4208 on Prevention of Laundering Proceeds of Crime) Article 4",
-          "BDDK Regulation on AML/CFT Compliance"
+          "FATF Recommendation 5 (Customer Due Diligence) - suspicious transaction with no apparent lawful purpose",
+          "FATF Recommendation 11 (Suspicious Transaction Reporting) - transaction suspected of money laundering involving high-risk jurisdictions and merchants",
+          "FATF Recommendation 13 (Correspondent Banking) - enhanced due diligence required for high-risk jurisdictions",
+          "MASAK Law No. 4208 Article 4 - reporting obligation for suspicious transactions",
+          "MASAK Law No. 4208 Article 5 - suspicious transaction indicators present",
+          "BDDK Regulation Section 3.1 - customer risk assessment with elevated risk profile",
+          "BDDK Regulation Section 4.2 - transaction monitoring alert exceeding internal threshold",
+          "BDDK Regulation Section 5.1 - STR filing obligation triggered by convergence of risk factors",
+          "BDDK Circular on Cryptocurrency and Digital Asset Risk Management - cryptocurrency exchange classified as high-risk merchant category"
         ],
-        "recommended_action": "File Suspicious Activity Report (ŞÜPHELİ İŞLEM BİLDİRİMİ) with MASAK immediately. Freeze transaction pending investigation. Conduct Enhanced Due Diligence (EDD) on customer ACC-74 including account review, verification of identity and source of funds, customer explanation for geolocation mismatch, and review of all 44 transactions in 30-day period. Assess merchant MERCH-0074 legitimacy and regulatory compliance. Force password reset and require multi-factor authentication. Re-screen customer and merchant against OFAC, EU, UN, and Turkish sanctions lists. Expand network analysis to identify circular flows and layering patterns. If MASAK issues freeze order, comply immediately. If investigation confirms suspicious activity, refer to law enforcement.",
-        "generated_at": "2026-05-06T20:29:28.575553Z",
+        "recommended_action": "FILE SUSPICIOUS ACTIVITY REPORT (ŞÜPHELİ İŞLEM BİLDİRİMİ) WITH MASAK within 10 business days of detection. Immediate actions: (1) Account security review and credential reset with forced password reset and multi-factor authentication requirement; (2) Transaction freeze on account ACC-74 pending investigation completion (minimum 5 business days); (3) Enhanced Due Diligence (EDD) including full KYC refresh, identity verification, source of funds verification, and written explanation for high-risk jurisdiction transactions and cryptocurrency exchange activity; (4) Merchant risk escalation and potential relationship termination with MERCH-0074. Follow-up: Investigation closure report within 5 business days, internal audit and control review of transaction monitoring system thresholds and access controls.",
+        "generated_at": "2026-05-06T20:40:32.257272Z",
         "agent_model": "claude-haiku-4-5-20251001"
       },
       "token_usage": {
-        "input_tokens": 22509,
-        "output_tokens": 1794
+        "input_tokens": 21703,
+        "output_tokens": 2058
       }
     },
-    "elapsed_ms": 78530.99999999994
+    "elapsed_ms": 106765.99999999962
   }
 ]
 '''
