@@ -36,3 +36,11 @@ class InvestigationResult(BaseModel):
         default_factory=list,
         description="Ordered tool invocations from message history: [{tool, args, result}].",
     )
+    cited_sources: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Citation strings for RAG excerpts explicitly used in evidence or reasoning. "
+            "Format: 'FILENAME.pdf, p.X' matching the citation field from regulatory_policy_rag output. "
+            "Leave empty if regulatory_policy_rag was not called or no excerpt was used."
+        ),
+    )

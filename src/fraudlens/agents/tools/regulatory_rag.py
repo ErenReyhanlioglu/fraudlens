@@ -26,9 +26,19 @@ async def regulatory_policy_rag(query: str) -> str:
         source document name, page number, and similarity score.
         Includes a formatted citation string for each excerpt.
     """
-    chunks = await retrieve(query, top_k=5)
+    bddk_query = f"BDDK MASAK şüpheli işlem {query}"
+    chunks_a, chunks_b = await retrieve(query, top_k=5), await retrieve(bddk_query, top_k=5)
 
-    if not chunks:
+    # Merge by (source, page), keep highest score per unique chunk
+    seen: dict[tuple[str, int], dict] = {}
+    for chunk in chunks_a + chunks_b:
+        key = (chunk["source"], chunk["page"])
+        if key not in seen or chunk["score"] > seen[key]["score"]:
+            seen[key] = chunk
+
+    merged = sorted(seen.values(), key=lambda c: c["score"], reverse=True)[:5]
+
+    if not merged:
         return json.dumps(
             {
                 "query": query,
@@ -39,7 +49,7 @@ async def regulatory_policy_rag(query: str) -> str:
         )
 
     excerpts = []
-    for chunk in chunks:
+    for chunk in merged:
         excerpts.append(
             {
                 "text": chunk["text"],

@@ -16,6 +16,7 @@ from typing import Any
 
 import structlog
 
+from fraudlens.agents._streaming import safe_update_job
 from fraudlens.schemas.decision import (
     AgentType,
     DecisionOutcome,
@@ -67,8 +68,29 @@ def _map_outcome(hint: DecisionHint, triage_action: str, confidence: float) -> D
     return DecisionOutcome.MANUAL_REVIEW
 
 
-def _parse_rag_citations(tool_trace: list[dict[str, Any]]) -> list[Regulatorycitation]:
+def _build_cited_set(cited_sources: list[str]) -> set[tuple[str, int]]:
+    """Parse 'FILENAME.pdf, p.X' strings into (source_stem, page) pairs for matching."""
+    import re
+    result: set[tuple[str, int]] = set()
+    for s in cited_sources:
+        m = re.search(r"p\.?\s*(\d+)", s, re.IGNORECASE)
+        if not m:
+            continue
+        page = int(m.group(1))
+        src_stem = s.split(",")[0].strip().lower().removesuffix(".pdf")
+        result.add((src_stem, page))
+    return result
+
+
+def _parse_rag_citations(
+    tool_trace: list[dict[str, Any]],
+    cited_sources: list[str] | None = None,
+) -> list[Regulatorycitation]:
     """Extract Regulatorycitation entries from regulatory_policy_rag tool results.
+
+    When cited_sources is provided, only excerpts explicitly referenced by the
+    agent (matched by source stem + page) are included. All retrieved chunks are
+    included when cited_sources is empty or absent.
 
     Each call's result is JSON with an `excerpts` list of
     `{text, citation, source, page, relevance_score}` objects. Failures (bad
@@ -111,6 +133,13 @@ def _parse_rag_citations(tool_trace: list[dict[str, Any]]) -> list[Regulatorycit
             continue
         seen.add(key)
         unique.append(c)
+
+    # Filter to only agent-cited chunks when the agent provided cited_sources
+    if cited_sources:
+        cited_set = _build_cited_set(cited_sources)
+        src_stem = lambda c: c.source.lower().removesuffix(".pdf")  # noqa: E731
+        unique = [c for c in unique if (src_stem(c), c.page) in cited_set]
+
     return unique
 
 
@@ -119,6 +148,7 @@ async def synthesize_decision(
     fraud_probability: float,
     triage_action: str,
     transaction_id: str,
+    job_id: str = "",
 ) -> FraudDecision:
     """Combine an InvestigationResult with triage context into a FraudDecision.
 
@@ -132,6 +162,11 @@ async def synthesize_decision(
         FraudDecision with deterministic outcome and parsed regulatory citations.
         Falls back to MANUAL_REVIEW outcome on unrecognized hint/action combos.
     """
+    await safe_update_job(
+        job_id,
+        thought="Synthesizing agent findings with ML score to determine final outcome...",
+    )
+
     agent_used = (
         AgentType.CRITICAL
         if triage_action == TriageAction.ESCALATE.value
@@ -144,7 +179,10 @@ async def synthesize_decision(
         investigation_result.confidence,
     )
 
-    citations = _parse_rag_citations(list(investigation_result.tool_trace))
+    citations = _parse_rag_citations(
+        list(investigation_result.tool_trace),
+        cited_sources=list(investigation_result.cited_sources),
+    )
 
     logger.info(
         "decision_synthesized",

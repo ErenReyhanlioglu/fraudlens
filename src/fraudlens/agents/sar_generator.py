@@ -1,8 +1,10 @@
 """SAR Generator — produces a structured Suspicious Activity Report.
 
-Runs only when the Decision Synthesizer outputs `escalate`. Uses claude-haiku-4-5
-with Anthropic prompt caching applied to the system template (the section
-headers stay constant across runs so caching them saves cost on every call).
+Runs only when the Decision Synthesizer outputs `escalate`. Two-phase execution:
+  1. Narrative streaming: LLM generates a compliance narrative via astream_events,
+     writing thought chunks to Redis so the UI can show real-time progress.
+  2. Structured parse: a second LLM call with with_structured_output converts the
+     narrative into a typed SARReport.
 
 Failures never propagate: a deterministic fallback assembles a minimal but
 valid SARReport from the existing investigation evidence so a SAR is always
@@ -19,8 +21,9 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from fraudlens.agents._streaming import safe_update_job
 from fraudlens.core.config import Settings
-from fraudlens.core.llm_throttle import throttled_invoke
+from fraudlens.core.llm_throttle import throttled_invoke, throttled_stream
 from fraudlens.schemas.decision import FraudDecision
 from fraudlens.schemas.investigation import InvestigationResult
 from fraudlens.schemas.sar import SARReport
@@ -56,6 +59,8 @@ Rules:
 - Draft the report in English for internal review purposes.
   A Turkish translation for MASAK filing is handled separately.
 - Output is for institutional record-keeping; tone is formal and concise."""
+
+_MAX_STRUCTURED_RETRIES = 2
 
 
 def _build_human_message(
@@ -132,18 +137,25 @@ async def generate_sar_report(
     transaction_context: dict[str, Any],
     investigation_result: InvestigationResult,
     settings: Settings,
+    job_id: str = "",
 ) -> SARReport:
     """Generate a structured SAR for an escalated decision.
+
+    Phase 1: Stream the compliance narrative via astream_events, writing
+    thought progress to Redis so polling clients see real-time output.
+
+    Phase 2: Parse the narrative into a typed SARReport via a separate
+    with_structured_output call with up to _MAX_STRUCTURED_RETRIES retries.
 
     Args:
         fraud_decision: The synthesized decision (must have outcome=ESCALATE).
         transaction_context: Full transaction request fields (banking + ML signals).
         investigation_result: The agent's structured investigation output.
         settings: Application settings carrying anthropic_api_key + model name.
+        job_id: Redis job identifier for thought streaming; "" disables updates.
 
     Returns:
-        SARReport. Falls back to a deterministic SAR composed from inputs on
-        any LLM or validation failure — exceptions are never propagated.
+        SARReport. Falls back to a deterministic SAR on any LLM or parse failure.
     """
     model_name = settings.anthropic_model_haiku
     log = logger.bind(transaction_id=fraud_decision.transaction_id, model=model_name)
@@ -156,8 +168,6 @@ async def generate_sar_report(
         max_retries=2,
     )
 
-    # Anthropic prompt caching — only the system template is marked ephemeral.
-    # The same template is reused for every SAR, so the cache hit rate is high.
     system_message = SystemMessage(
         content=[
             {
@@ -167,37 +177,87 @@ async def generate_sar_report(
             }
         ]
     )
-
     human_message = HumanMessage(
         content=_build_human_message(fraud_decision, transaction_context, investigation_result)
     )
 
-    structured_llm = llm.with_structured_output(SARReport)
+    # --- Phase 1: stream narrative ---
+    narrative = ""
+    last_written_len = 0
 
     try:
-        raw = await throttled_invoke(
-            lambda: structured_llm.ainvoke([system_message, human_message]),
-            label="sar_generator_invoke",
-        )
+        async with throttled_stream("sar_generator_stream"):
+            async for event in llm.astream_events(
+                [system_message, human_message],
+                version="v2",
+            ):
+                if event["event"] != "on_chat_model_stream":
+                    continue
+                chunk = event["data"].get("chunk")
+                if not (chunk and hasattr(chunk, "content")):
+                    continue
+                content = chunk.content
+                if isinstance(content, str):
+                    narrative += content
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            narrative += block.get("text", "")
+
+                if job_id and len(narrative) - last_written_len >= 150:
+                    await safe_update_job(job_id, thought=narrative.strip())
+                    last_written_len = len(narrative)
+
+        if job_id and len(narrative) > last_written_len:
+            await safe_update_job(job_id, thought=narrative.strip())
+
     except Exception as exc:
-        log.warning("sar_llm_call_failed", error=str(exc))
+        log.warning("sar_stream_failed", error=str(exc))
         return _fallback_sar(fraud_decision, transaction_context, investigation_result, model_name)
 
-    try:
-        report: SARReport = (
-            raw if isinstance(raw, SARReport) else SARReport.model_validate(raw)
-        )
-    except ValidationError as exc:
-        log.warning("sar_structured_output_invalid", error=str(exc))
+    if not narrative.strip():
+        log.warning("sar_narrative_empty")
         return _fallback_sar(fraud_decision, transaction_context, investigation_result, model_name)
 
-    # Override two fields that should always reflect server-side truth.
-    report = report.model_copy(
+    # --- Phase 2: structured parse ---
+    await safe_update_job(job_id, thought=narrative.strip() + "\n\n[Extracting structured SAR fields...]")
+    structured_llm = llm.with_structured_output(SARReport)
+    parse_prompt = (
+        "Extract a structured SAR report from the following compliance narrative.\n\n"
+        f"Narrative:\n{narrative}\n\n"
+        "Fill all fields from the narrative. "
+        "Do not invent data not present in the narrative."
+    )
+
+    result: SARReport | None = None
+    for attempt in range(_MAX_STRUCTURED_RETRIES + 1):
+        try:
+            raw = await throttled_invoke(
+                lambda: structured_llm.ainvoke(
+                    [
+                        SystemMessage(content="You extract structured SAR reports from compliance narratives."),
+                        HumanMessage(content=parse_prompt),
+                    ]
+                ),
+                label="sar_structured_parse",
+            )
+            result = raw if isinstance(raw, SARReport) else SARReport.model_validate(raw)
+            break
+        except (ValidationError, Exception) as exc:
+            if attempt == _MAX_STRUCTURED_RETRIES:
+                log.warning("sar_structured_parse_failed", error=str(exc))
+                return _fallback_sar(fraud_decision, transaction_context, investigation_result, model_name)
+            log.debug("sar_structured_retry", attempt=attempt + 1)
+
+    if result is None:
+        return _fallback_sar(fraud_decision, transaction_context, investigation_result, model_name)
+
+    result = result.model_copy(
         update={
             "transaction_id": fraud_decision.transaction_id,
             "agent_model": model_name,
             "generated_at": datetime.now(UTC),
         }
     )
-    log.info("sar_generator_done", indicators=len(report.suspicious_indicators))
-    return report
+    log.info("sar_generator_done", indicators=len(result.suspicious_indicators))
+    return result

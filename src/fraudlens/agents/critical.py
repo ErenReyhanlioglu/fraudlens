@@ -17,6 +17,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from fraudlens.agents._streaming import stream_agent_events
 from fraudlens.agents.tools.adverse_media_search import adverse_media_search
 from fraudlens.agents.tools.customer_history import get_customer_history
 from fraudlens.agents.tools.explain_ml_score import make_explain_ml_score_tool
@@ -127,6 +128,7 @@ async def run_critical_agent(
     fraud_probability: float,
     shap_values: dict[str, float],
     transaction_context: str,
+    job_id: str = "",
 ) -> tuple[InvestigationResult, dict[str, int]]:
     """Run the Critical Agent for a single high-risk transaction.
 
@@ -180,14 +182,14 @@ async def run_critical_agent(
     log.info("critical_agent_start")
 
     try:
-        agent_output = await throttled_invoke(
-            lambda: agent.ainvoke({"messages": [system_message, human_message]}), label="critical_agent_main_invoke"
+        messages, _ = await stream_agent_events(
+            agent=agent,
+            input_messages={"messages": [system_message, human_message]},
+            job_id=job_id,
         )
     except Exception:
         log.exception("critical_agent_failed")
         return _fallback_result(transaction_id), {"input_tokens": 0, "output_tokens": 0}
-
-    messages = agent_output.get("messages", [])
     tools_called, tool_trace = _extract_tool_trace(messages)
     token_usage = _extract_token_usage(messages)
 
@@ -212,11 +214,15 @@ async def run_critical_agent(
         "0.40–0.60 for inconclusive, 0.70–0.90 for likely_legitimate. "
         "NEVER return 0.0 unless all tools failed.\n"
         "- evidence: list of specific facts from the investigation (tool outputs, scores, dates). "
-        "If regulatory_policy_rag was called, include the cited regulation as an evidence item.\n"
+        "Do NOT include regulatory citation items here — those belong in cited_sources only.\n"
         "- red_flags: list of short risk signal labels (e.g. 'circular_fund_flow', 'sanctions_match', "
         "'sanctions_list_hit', 'pep_flag', 'structuring_pattern')\n"
         "- reasoning_summary: 3–5 sentence narrative explaining the verdict, the evidence chain, "
         "and any regulatory basis. If a regulation was cited, name it explicitly.\n"
+        "- cited_sources: list of citation strings for the RAG excerpts you ACTUALLY used in your "
+        "reasoning. Copy the exact 'citation' field value from the regulatory_policy_rag output "
+        "(format: 'FILENAME.pdf, p.X'). Only include excerpts you referenced — not all retrieved ones. "
+        "Leave empty if you did not use any RAG excerpt.\n"
         "- do NOT include tool_trace or tools_called — those are set programmatically\n"
     )
 

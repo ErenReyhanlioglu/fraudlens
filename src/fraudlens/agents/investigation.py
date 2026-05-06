@@ -19,13 +19,14 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from fraudlens.agents._streaming import stream_agent_events
 from fraudlens.agents.tools.customer_history import get_customer_history
 from fraudlens.agents.tools.explain_ml_score import make_explain_ml_score_tool
 from fraudlens.agents.tools.geolocation import get_geolocation_context
 from fraudlens.agents.tools.merchant_rep import check_merchant_reputation
 from fraudlens.agents.tools.similar_patterns import find_similar_patterns
-from fraudlens.core.llm_throttle import throttled_invoke
 from fraudlens.core.config import get_settings
+from fraudlens.core.llm_throttle import throttled_invoke
 from fraudlens.schemas.investigation import DecisionHint, InvestigationResult
 
 logger = structlog.get_logger(__name__)
@@ -138,6 +139,7 @@ async def run_investigation_agent(
     fraud_probability: float,
     shap_values: dict[str, float],
     transaction_context: str,
+    job_id: str = "",
 ) -> tuple[InvestigationResult, dict[str, int]]:
     """Run the Investigation Agent for a single medium-risk transaction.
 
@@ -189,14 +191,14 @@ async def run_investigation_agent(
     log.info("investigation_agent_start")
 
     try:
-        agent_output = await throttled_invoke(
-            lambda: agent.ainvoke({"messages": [system_message, human_message]}), label="investigation_agent_main_invoke"
+        messages, _ = await stream_agent_events(
+            agent=agent,
+            input_messages={"messages": [system_message, human_message]},
+            job_id=job_id,
         )
     except Exception:
         log.exception("investigation_agent_failed")
         return _fallback_result(transaction_id), {"input_tokens": 0, "output_tokens": 0}
-
-    messages = agent_output.get("messages", [])
     tools_called, tool_trace = _extract_tool_trace(messages)
     token_usage = _extract_token_usage(messages)
 
